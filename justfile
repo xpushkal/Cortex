@@ -28,7 +28,7 @@ migrate:
 
 # Seed the deterministic sample corpus (M0+).
 seed:
-    uv run python -m cortex.connectors.sample --tenant demo
+    uv run python -m cortex.workers.ingest --source sample --tenant demo
 
 # Run the API with autoreload.
 dev:

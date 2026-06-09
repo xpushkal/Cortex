@@ -86,6 +86,25 @@ async def upsert_chunks(client: AsyncQdrantClient, points: list[ChunkVector]) ->
     )
 
 
+async def delete_artifact_points(
+    client: AsyncQdrantClient, *, tenant_id: uuid.UUID, artifact_id: uuid.UUID
+) -> None:
+    """Remove all points for one artifact (used when its content changed)."""
+    await client.delete(
+        collection_name=CHUNKS_COLLECTION,
+        points_selector=models.Filter(
+            must=[
+                models.FieldCondition(
+                    key="tenant_id", match=models.MatchValue(value=str(tenant_id))
+                ),
+                models.FieldCondition(
+                    key="artifact_id", match=models.MatchValue(value=str(artifact_id))
+                ),
+            ]
+        ),
+    )
+
+
 async def search(
     client: AsyncQdrantClient,
     *,

@@ -5,8 +5,8 @@ be **stable**: same items, same external_ids, same content every run. It covers 
 spread of recurring company processes (refunds, incidents, pricing, etc.) so seed
 queries have clearly-relevant targets.
 
-Runnable via the ingestion CLI: `python -m cortex.connectors.sample --tenant demo`
-(wired to the pipeline in cortex.workers).
+Ingest it with: `python -m cortex.workers.ingest --source sample --tenant demo`
+(or `just seed`).
 """
 
 from __future__ import annotations
