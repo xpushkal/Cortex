@@ -11,12 +11,14 @@ dependencies = [
     "cortex-storage",
     "cortex-retrieval",
     "cortex-connectors",
+    "cortex-obs",
 ]
 
 [tool.uv.sources]
 cortex-storage = { workspace = true }
 cortex-retrieval = { workspace = true }
 cortex-connectors = { workspace = true }
+cortex-obs = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

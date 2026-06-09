@@ -17,6 +17,11 @@ exporters:
   # Metrics scraped by Prometheus at :8889.
   prometheus:
     endpoint: 0.0.0.0:8889
+  # Traces forwarded to Tempo (Grafana reads them from there).
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
   debug:
     verbosity: normal
 
@@ -25,7 +30,7 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [debug]
+      exporters: [otlp/tempo, debug]
     metrics:
       receivers: [otlp]
       processors: [batch]

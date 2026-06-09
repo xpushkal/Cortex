@@ -22,6 +22,7 @@ dependencies = [
     "cortex-knowledge",
     "cortex-eval",
     "cortex-storage",
+    "cortex-obs",
 ]
 
 [dependency-groups]
@@ -54,6 +55,7 @@ cortex-retrieval = { workspace = true }
 cortex-knowledge = { workspace = true }
 cortex-eval = { workspace = true }
 cortex-storage = { workspace = true }
+cortex-obs = { workspace = true }
 
 # ---------------------------------------------------------------------------
 # Linting & formatting (ruff)
@@ -95,6 +97,7 @@ mypy_path = [
     "packages/knowledge/src",
     "packages/eval/src",
     "packages/storage/src",
+    "packages/obs/src",
 ]
 strict = true
 warn_unused_configs = true

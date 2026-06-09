@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cortex.connectors import SampleConnector
 from cortex.connectors.base import Connector, SourceConfig
+from cortex.obs import get_tracer, init_tracing
 from cortex.retrieval import chunk, get_embedder
 from cortex.retrieval.embedding import Embedder
 from cortex.storage import (
@@ -38,6 +39,7 @@ from cortex.storage import (
 )
 
 CONNECTORS: dict[str, type[Connector]] = {"sample": SampleConnector}
+_tracer = get_tracer(__name__)
 
 
 class IngestStats(BaseModel):
@@ -75,6 +77,8 @@ async def ingest_source(
     embedder: Embedder | None = None,
 ) -> IngestStats:
     """Backfill a connector into Postgres + Qdrant for one tenant. Idempotent."""
+    span = _tracer.start_span(f"ingest.{connector.kind}")
+    span.set_attribute("cortex.tenant_id", str(tenant_id))
     embedder = embedder or get_embedder()
     qclient = get_qdrant(qdrant_url)
     await ensure_collection(qclient, dim=embedder.dim)
@@ -156,12 +160,17 @@ async def ingest_source(
         await session.commit()
 
     await upsert_chunks(qclient, vectors)
+    span.set_attribute("cortex.artifacts", stats.artifacts)
+    span.set_attribute("cortex.chunks", stats.chunks)
+    span.set_attribute("cortex.skipped", stats.skipped)
+    span.end()
     return stats
 
 
 async def _amain(source: str, tenant: str) -> None:
     if source not in CONNECTORS:
         raise SystemExit(f"unknown source {source!r}; known: {sorted(CONNECTORS)}")
+    init_tracing("cortex-workers")
     tenant_id = resolve_tenant(tenant)
     stats = await ingest_source(CONNECTORS[source](), tenant_id=tenant_id)
     print(f"ingested tenant={tenant} ({tenant_id}): {stats.model_dump()}")
