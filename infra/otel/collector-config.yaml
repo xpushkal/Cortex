@@ -1,0 +1,32 @@
+# OpenTelemetry Collector — receives OTLP traces/metrics from the API and workers
+# and exposes Prometheus-scrapeable metrics. Spans across API -> retrieve -> rerank
+# -> LLM and connector -> worker -> store (docs/ARCHITECTURE.md §9).
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+
+exporters:
+  # Metrics scraped by Prometheus at :8889.
+  prometheus:
+    endpoint: 0.0.0.0:8889
+  debug:
+    verbosity: normal
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [prometheus]

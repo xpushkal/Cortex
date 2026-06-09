@@ -1,0 +1,18 @@
+# Prometheus scrape config. Pulls collector-exported metrics and the API's own
+# /metrics endpoint. Eval headline metrics are pushed here so Grafana can track
+# retrieval quality over time (docs/RETRIEVAL_AND_ML.md §5.5).
+
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: otel-collector
+    static_configs:
+      - targets: ["otel-collector:8889"]
+
+  - job_name: cortex-api
+    # The API exposes Prometheus metrics via prometheus-client. host.docker.internal
+    # reaches the API running on the host during local dev.
+    static_configs:
+      - targets: ["host.docker.internal:8000"]
+    metrics_path: /metrics
