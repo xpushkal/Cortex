@@ -10,8 +10,10 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from cortex.api.config import get_settings
+from cortex.api.search import router as search_router
 
 app = FastAPI(title="Cortex", version="0.0.0")
+app.include_router(search_router)
 
 
 @app.get("/healthz")

@@ -33,6 +33,7 @@ from cortex.storage import (
     ensure_collection,
     get_qdrant,
     get_sessionmaker,
+    resolve_tenant,
     upsert_chunks,
 )
 
@@ -158,18 +159,10 @@ async def ingest_source(
     return stats
 
 
-def _resolve_tenant(value: str) -> uuid.UUID:
-    """Accept a UUID or a friendly name (hashed into a stable namespaced UUID)."""
-    try:
-        return uuid.UUID(value)
-    except ValueError:
-        return uuid.uuid5(uuid.NAMESPACE_DNS, f"cortex-tenant:{value}")
-
-
 async def _amain(source: str, tenant: str) -> None:
     if source not in CONNECTORS:
         raise SystemExit(f"unknown source {source!r}; known: {sorted(CONNECTORS)}")
-    tenant_id = _resolve_tenant(tenant)
+    tenant_id = resolve_tenant(tenant)
     stats = await ingest_source(CONNECTORS[source](), tenant_id=tenant_id)
     print(f"ingested tenant={tenant} ({tenant_id}): {stats.model_dump()}")
 

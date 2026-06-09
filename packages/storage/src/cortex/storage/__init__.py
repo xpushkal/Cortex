@@ -17,6 +17,7 @@ from cortex.storage.qdrant import (
     search,
     upsert_chunks,
 )
+from cortex.storage.tenancy import resolve_tenant
 
 __all__ = [
     "CHUNKS_COLLECTION",
@@ -31,6 +32,7 @@ __all__ = [
     "get_engine",
     "get_qdrant",
     "get_sessionmaker",
+    "resolve_tenant",
     "search",
     "upsert_chunks",
 ]
