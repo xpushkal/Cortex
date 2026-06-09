@@ -1,0 +1,30 @@
+# Nightly full eval run. Emits the markdown+JSON quality report and (M1+) pushes
+# headline metrics to Prometheus so Grafana tracks retrieval quality over time
+# (docs/RETRIEVAL_AND_ML.md §5.5). Manual dispatch supported.
+name: eval
+
+on:
+  schedule:
+    - cron: "0 6 * * *"  # 06:00 UTC daily
+  workflow_dispatch:
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    env:
+      EVAL_GATE: advisory
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - run: uv sync --all-extras
+      - name: run eval suite
+        run: uv run pytest -m eval -ra
+      - name: upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: .eval-reports/
+          if-no-files-found: ignore

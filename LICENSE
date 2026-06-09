@@ -1,0 +1,22 @@
+Copyright (c) 2026 Cortex / xpushkal. All rights reserved.
+
+PROPRIETARY AND CONFIDENTIAL — PLACEHOLDER LICENSE.
+
+# TODO(license): Choose and replace this before any public/source-available
+# release. Recommended for a commercial infrastructure product:
+#   - Business Source License 1.1 (BSL) — source-available, converts to an
+#     OSI license (e.g. Apache-2.0) after a change date. Used by Sentry,
+#     CockroachDB, MariaDB. See https://mariadb.com/bsl11/
+#   - Or keep fully proprietary (this notice).
+# Do NOT default to MIT/Apache: relicensing more permissively later is easy,
+# but walking a permissive grant back is effectively impossible.
+
+This software and its source code are the confidential and proprietary
+information of the copyright holder. No license, right, or permission to use,
+copy, modify, distribute, sublicense, or create derivative works of this
+software is granted except by an explicit written agreement with the copyright
+holder. Unauthorized use is prohibited.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.

@@ -92,7 +92,8 @@ Full detail: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ```
 cortex/
-├── README.md
+├── pyproject.toml             # uv workspace root + ruff/mypy/pytest config
+├── justfile                   # task runner (just up / migrate / dev / test / lint)
 ├── docs/
 │   ├── PRD.md                 # product requirements
 │   ├── ARCHITECTURE.md        # system design
@@ -100,23 +101,29 @@ cortex/
 │   ├── RETRIEVAL_AND_ML.md    # chunking, embeddings, retrieval, eval
 │   ├── INGESTION.md           # connectors, pipeline, freshness loop
 │   ├── API.md                 # REST surface + rate limiting
-│   └── ROADMAP.md             # phased build plan + done-when gates
+│   ├── ROADMAP.md             # phased build plan + done-when gates
+│   ├── ENGINEERING-WORKFLOW.md  # VCS, dev loop, releases, DoD
+│   ├── TEST-STRATEGY.md       # test tiers + the eval regression gate
+│   └── ADR/                   # architecture decision records
 ├── apps/
-│   ├── api/                   # FastAPI serving plane
-│   ├── workers/               # arq ingestion + extraction workers
+│   ├── api/                   # FastAPI serving plane (+ Dockerfile)
+│   ├── workers/               # arq ingestion + extraction workers (+ Dockerfile)
 │   └── admin/                 # Next.js admin UI (optional)
 ├── packages/
 │   ├── connectors/            # source adapters (slack, gmail, ...)
 │   ├── retrieval/             # chunking, embedding, hybrid + rerank
 │   ├── knowledge/             # entity/relation/process extraction
-│   └── eval/                  # golden sets + metric harness
+│   └── eval/                  # golden sets + metric harness + CI gate
 ├── infra/
-│   ├── docker-compose.yml
-│   ├── terraform/
-│   └── k8s/
-└── scripts/
-    ├── train_embeddings.py    # contrastive fine-tune + hard-neg mining
-    └── load_test.py           # k6/locust driver
+│   ├── docker-compose.yml     # postgres, qdrant, redis, otel, prometheus, grafana
+│   ├── terraform/  k8s/       # cloud infra (M4)
+│   └── otel/  prometheus/  grafana/
+├── migrations/                # alembic
+├── tests/                     # unit / integration / eval
+├── scripts/
+│   ├── train_embeddings.py    # contrastive fine-tune + hard-neg mining
+│   └── load_test.py           # k6/locust driver
+└── .github/workflows/         # ci · eval · release
 ```
 
 ---
@@ -124,27 +131,33 @@ cortex/
 ## Quickstart
 
 ```bash
-# 1. spin up infra (postgres, qdrant, redis, otel collector, grafana)
-docker compose -f infra/docker-compose.yml up -d
+# 1. install everything (uv manages Python 3.12 + all workspace deps)
+uv sync --all-extras
 
-# 2. install
-uv venv && source .venv/bin/activate
-uv pip install -e ".[dev]"
+# 2. spin up infra (postgres, qdrant, redis, otel collector, prometheus, grafana)
+just up            # or: docker compose -f infra/docker-compose.yml up -d
 
-# 3. migrate
-alembic upgrade head
+# 3. configure + migrate
+cp .env.example .env
+just migrate       # alembic upgrade head
 
-# 4. run a source ingest (sandbox connector)
-python -m cortex.cli ingest --source sample --tenant demo
-
-# 5. run the API
-uvicorn cortex.api.main:app --reload
-
-# 6. query
-curl -s localhost:8000/v1/ask \
-  -H "X-Tenant: demo" \
-  -d '{"q": "how do we handle a refund over $500?"}'
+# 4. run the API and check it's live
+just dev           # uvicorn cortex.api.main:app --reload
+curl -s localhost:8000/healthz   # -> {"status":"ok"}
 ```
+
+Ingestion and the `/ask` · `/search` query surface land in **M0+**
+(see [`docs/ROADMAP.md`](docs/ROADMAP.md)); today the serving skeleton exposes
+liveness/readiness. Run `just` to list all developer tasks.
+
+---
+
+## Contributing
+
+Engineering workflow, branching, and the Definition of Done live in
+[`CONTRIBUTING.md`](CONTRIBUTING.md) and
+[`docs/ENGINEERING-WORKFLOW.md`](docs/ENGINEERING-WORKFLOW.md); the test approach
+and quality gate are in [`docs/TEST-STRATEGY.md`](docs/TEST-STRATEGY.md).
 
 ---
 

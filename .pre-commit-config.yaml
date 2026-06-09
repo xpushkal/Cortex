@@ -1,0 +1,48 @@
+# Pre-commit gates. Install once: `uv run pre-commit install --hook-type pre-commit
+# --hook-type commit-msg`. Run on demand: `uv run pre-commit run --all-files`.
+# These mirror the CI gates so failures surface before a commit, not in CI.
+
+default_install_hook_types: [pre-commit, commit-msg]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+
+  # Lint + format (pinned; keep in step with the ruff dev dependency).
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.16
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # Strict type check via the workspace's own mypy (sees all members).
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy (strict)
+        entry: uv run mypy
+        language: system
+        pass_filenames: false
+        types: [python]
+
+  # Secret scanning — no credentials ever reach the repo (SECURITY.md).
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  # Enforce Conventional Commits on the commit message (feeds CHANGELOG + SemVer).
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v3.30.0
+    hooks:
+      - id: commitizen
+        stages: [commit-msg]
