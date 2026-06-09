@@ -8,7 +8,15 @@ dependencies = [
     "redis>=5.0",
     "pydantic>=2.7",
     "pydantic-settings>=2.4",
+    "cortex-storage",
+    "cortex-retrieval",
+    "cortex-connectors",
 ]
+
+[tool.uv.sources]
+cortex-storage = { workspace = true }
+cortex-retrieval = { workspace = true }
+cortex-connectors = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
