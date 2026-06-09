@@ -117,6 +117,10 @@ ignore_missing_imports = true
 minversion = "8.0"
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# One event loop for the whole session so cached async engines/clients (which bind
+# to the loop active at first use) stay valid across tests.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
 addopts = "-ra --strict-markers"
 markers = [
     "integration: needs live Postgres/Qdrant/Redis (compose or testcontainers)",
