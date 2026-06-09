@@ -163,4 +163,6 @@ and quality gate are in [`docs/TEST-STRATEGY.md`](docs/TEST-STRATEGY.md).
 
 ## Status
 
-Pre-alpha. Build order and acceptance gates: [`docs/ROADMAP.md`](docs/ROADMAP.md).
+Pre-alpha. **M0 (skeleton vertical slice) complete**: ingest the sample corpus →
+dense, tenant-filtered `/v1/search`, with end-to-end tracing. Build order and
+acceptance gates: [`docs/ROADMAP.md`](docs/ROADMAP.md).

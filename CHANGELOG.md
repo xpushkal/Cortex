@@ -8,7 +8,21 @@ derived from [Conventional Commits](https://www.conventionalcommits.org/) on
 
 ## [Unreleased]
 
-### Added
+### Added — M0 (skeleton vertical slice)
+- `cortex-storage`: async SQLAlchemy models (Source/Artifact/Chunk, tenant-scoped),
+  Alembic migration `0002`, and a Qdrant store with **mandatory tenant-filtered
+  search**.
+- `cortex-obs`: shared OpenTelemetry tracing; Tempo added to the stack so traces
+  flow API/worker → collector → Tempo → Grafana.
+- Sample connector (deterministic 12-doc corpus), fixed-size chunker, and a
+  pluggable embedder (hashing default; `bge-small` behind the `ml` extra).
+- Ingestion pipeline (`cortex.workers.ingest`): connector → hash → chunk → embed →
+  Postgres + Qdrant, idempotent on `content_hash`. `just seed` runs it.
+- `POST /v1/search`: dense, tenant-scoped retrieval (X-Tenant required).
+- Integration tests: seed-query retrieval, **cross-tenant leakage guard**, and
+  ingestion idempotency — all live against Postgres + Qdrant.
+
+### Added — scaffolding
 - Engineering scaffolding: uv workspace, repo skeleton (`apps/*`, `packages/*`),
   ruff + mypy + pytest tooling, pre-commit gates.
 - Local infra via `infra/docker-compose.yml` (Postgres, Qdrant, Redis, OTel,
