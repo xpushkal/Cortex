@@ -16,7 +16,7 @@ jobs:
     name: lint + types
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
@@ -53,7 +53,7 @@ jobs:
       QDRANT_URL: http://localhost:6333
       REDIS_URL: redis://localhost:6379/0
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
@@ -70,7 +70,7 @@ jobs:
       # Flip to "blocking" once a credible golden set exists (docs/TEST-STRATEGY.md).
       EVAL_GATE: advisory
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
@@ -84,7 +84,7 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: build api image (no push)
         run: docker build -f apps/api/Dockerfile -t cortex-api:ci .
       - name: build worker image (no push)
