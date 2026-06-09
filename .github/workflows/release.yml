@@ -1,0 +1,32 @@
+# Release — on a vX.Y.Z tag, build and push API + worker images to GHCR.
+# Terraform/k8s apply is wired in M4; for now this publishes images only.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: api image
+        run: |
+          IMAGE=ghcr.io/${{ github.repository }}-api:${{ github.ref_name }}
+          docker build -f apps/api/Dockerfile -t "$IMAGE" .
+          docker push "$IMAGE"
+      - name: worker image
+        run: |
+          IMAGE=ghcr.io/${{ github.repository }}-workers:${{ github.ref_name }}
+          docker build -f apps/workers/Dockerfile -t "$IMAGE" .
+          docker push "$IMAGE"
