@@ -105,6 +105,11 @@ warn_unused_ignores = true
 module = ["tests.*"]
 disallow_untyped_defs = false
 
+# Optional ML deps (the `ml`/`onnx` extras) ship no type stubs.
+[[tool.mypy.overrides]]
+module = ["sentence_transformers.*", "torch.*", "onnxruntime.*"]
+ignore_missing_imports = true
+
 # ---------------------------------------------------------------------------
 # Tests & coverage
 # ---------------------------------------------------------------------------
