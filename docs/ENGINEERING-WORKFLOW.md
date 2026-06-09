@@ -44,9 +44,9 @@ underlying tools (see `.github/workflows/ci.yml`).
   history must be linear. This applies even though the project is solo.
 - **Short-lived branches** off `main`, named by Conventional-Commit type:
   `feat/…`, `fix/…`, `chore/…`, `docs/…`, `ci/…`, `test/…`, `refactor/…`.
-- **Open a PR even when solo.** The PR is the gate: it runs CI and carries the
-  Definition-of-Done checklist. **Squash-merge** so `main` stays one commit per
-  change.
+- **Open a PR even when solo.** The PR is the gate: it runs CI, and the
+  Definition of Done (§6) must hold before merge. **Squash-merge** so `main` stays
+  one commit per change.
 - **Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/).**
   This is enforced by the `commitizen` commit-msg hook and feeds `CHANGELOG.md`
   and SemVer. Do **not** add co-authors that didn't write the change.
@@ -65,10 +65,14 @@ underlying tools (see `.github/workflows/ci.yml`).
 
 ## 6. Definition of Done
 
-A change is done when the PR checklist passes (see `.github/PULL_REQUEST_TEMPLATE.md`):
-green `just ci`, tests added, no secrets, docs/CHANGELOG updated if behavior
-changed, tenant isolation preserved, and every new knowledge artifact carries
-citations.
+A change is done when all of the following hold:
+
+- Conventional Commit title; `just ci` green (ruff + mypy + tests).
+- Tests added/updated (unit; integration if it touches I/O).
+- No secrets committed; `.env.example` updated if new config was added.
+- Docs/CHANGELOG updated if behavior or interfaces changed.
+- Tenant isolation preserved (no retrieval path without a tenant filter).
+- Every new knowledge/process artifact carries citations.
 
 ## 7. Architectural decisions
 

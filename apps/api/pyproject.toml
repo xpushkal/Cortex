@@ -15,7 +15,13 @@ dependencies = [
     "prometheus-client>=0.20",
     "opentelemetry-sdk>=1.27",
     "opentelemetry-instrumentation-fastapi>=0.48b0",
+    "cortex-storage",
+    "cortex-retrieval",
 ]
+
+[tool.uv.sources]
+cortex-storage = { workspace = true }
+cortex-retrieval = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

@@ -24,12 +24,14 @@ config.set_main_option(
     "sqlalchemy.url",
     os.environ.get(
         "POSTGRES_DSN",
-        "postgresql+asyncpg://cortex:cortex@localhost:5432/cortex",
+        "postgresql+asyncpg://cortex:cortex@localhost:5433/cortex",
     ),
 )
 
-# Set to the project's MetaData once models exist (M0) to enable autogenerate.
-target_metadata = None
+# Project MetaData drives autogenerate (M0+).
+from cortex.storage.models import Base  # noqa: E402
+
+target_metadata = Base.metadata
 
 
 def do_run_migrations(connection: Connection) -> None:

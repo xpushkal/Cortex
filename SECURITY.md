@@ -30,5 +30,5 @@ These are enforced in code and asserted in tests — a regression fails the buil
 
 ## Dependencies
 
-Dependabot proposes weekly updates; `pip-audit` runs in CI to flag known
-vulnerabilities in the locked dependency set.
+Run `just audit` (`pip-audit`) to flag known vulnerabilities in the locked
+dependency set; wire it into CI as a gate before any public release.

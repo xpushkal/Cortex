@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     cortex_env: str = "local"
     log_level: str = "INFO"
 
-    postgres_dsn: str = "postgresql+asyncpg://cortex:cortex@localhost:5432/cortex"
+    postgres_dsn: str = "postgresql+asyncpg://cortex:cortex@localhost:5433/cortex"
     qdrant_url: str = "http://localhost:6333"
     redis_url: str = "redis://localhost:6379/0"
 

@@ -13,5 +13,15 @@ from cortex.connectors.base import (
     SourceConfig,
     TokenBucketSpec,
 )
+from cortex.connectors.sample import SAMPLE_CORPUS, SampleConnector
 
-__all__ = ["Artifact", "Connector", "Cursor", "RawItem", "SourceConfig", "TokenBucketSpec"]
+__all__ = [
+    "SAMPLE_CORPUS",
+    "Artifact",
+    "Connector",
+    "Cursor",
+    "RawItem",
+    "SampleConnector",
+    "SourceConfig",
+    "TokenBucketSpec",
+]
