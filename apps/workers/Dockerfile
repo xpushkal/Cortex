@@ -5,7 +5,7 @@ WORKDIR /app
 COPY . .
 RUN uv sync --frozen --no-dev
 
-FROM python:3.12-slim-bookworm AS runtime
+FROM python:3.14-slim-bookworm AS runtime
 WORKDIR /app
 RUN useradd --create-home --uid 10001 cortex
 COPY --from=build /app /app
