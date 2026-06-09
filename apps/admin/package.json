@@ -1,0 +1,9 @@
+{
+  "name": "cortex-admin",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Cortex admin UI (Next.js) — optional, minimal. Scaffolded in a later milestone.",
+  "scripts": {
+    "dev": "echo 'TODO: next dev — admin UI is scaffolded in a later milestone' && exit 1"
+  }
+}

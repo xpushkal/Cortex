@@ -1,0 +1,68 @@
+# Cortex task runner. Install just: https://github.com/casey/just
+# Run `just` with no args to list recipes.
+
+set dotenv-load := true
+
+default:
+    @just --list
+
+# Install / sync all workspace deps into .venv (pinned by uv.lock).
+sync:
+    uv sync --all-extras
+
+# Bring local infra up (Postgres, Qdrant, Redis, OTel, Prometheus, Grafana).
+up:
+    docker compose -f infra/docker-compose.yml up -d
+
+# Tear infra down (keep volumes).
+down:
+    docker compose -f infra/docker-compose.yml down
+
+# Tear infra down AND wipe volumes (fresh state).
+nuke:
+    docker compose -f infra/docker-compose.yml down -v
+
+# Apply database migrations.
+migrate:
+    uv run alembic upgrade head
+
+# Seed the deterministic sample corpus (M0+).
+seed:
+    uv run python -m cortex.connectors.sample --tenant demo
+
+# Run the API with autoreload.
+dev:
+    uv run uvicorn cortex.api.main:app --reload --port 8000
+
+# Lint + format check.
+lint:
+    uv run ruff check .
+    uv run ruff format --check .
+
+# Auto-fix lint + format.
+fmt:
+    uv run ruff check --fix .
+    uv run ruff format .
+
+# Static type check.
+types:
+    uv run mypy
+
+# Unit + integration tests with coverage.
+test:
+    uv run pytest --cov --cov-report=term-missing
+
+# Fast unit-only tests (no live services).
+test-unit:
+    uv run pytest -m "not integration and not eval and not load"
+
+# Run the eval harness / quality gate.
+eval:
+    uv run pytest -m eval
+
+# Dependency vulnerability audit.
+audit:
+    uv run pip-audit
+
+# Everything CI runs, locally.
+ci: lint types test
