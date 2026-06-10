@@ -6,12 +6,20 @@ requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.7",
     "qdrant-client>=1.11",
+    "cortex-storage",
+    "cortex-obs",
 ]
+
+[tool.uv.sources]
+cortex-storage = { workspace = true }
+cortex-obs = { workspace = true }
 
 [project.optional-dependencies]
 # Heavy ML deps kept optional so base `uv sync` stays fast. Install with
 # `uv sync --extra ml` (or --all-extras) when working on embeddings/rerank.
 ml = ["sentence-transformers>=3.0", "torch>=2.3"]
+# LLM-generated contextual blurbs (CORTEX_BLURB_MODE=llm); template mode needs nothing.
+llm = ["anthropic>=0.50"]
 onnx = ["onnxruntime>=1.18"]
 
 [build-system]

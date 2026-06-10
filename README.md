@@ -146,9 +146,9 @@ just dev           # uvicorn cortex.api.main:app --reload
 curl -s localhost:8000/healthz   # -> {"status":"ok"}
 ```
 
-Ingestion and the `/ask` · `/search` query surface land in **M0+**
-(see [`docs/ROADMAP.md`](docs/ROADMAP.md)); today the serving skeleton exposes
-liveness/readiness. Run `just` to list all developer tasks.
+`/v1/search` (hybrid, tenant-filtered) is live; `/ask` · `/processes` ·
+`/skills` land in **M2+** (see [`docs/ROADMAP.md`](docs/ROADMAP.md)). Run `just`
+to list all developer tasks.
 
 ---
 
@@ -163,4 +163,10 @@ and quality gate are in [`docs/TEST-STRATEGY.md`](docs/TEST-STRATEGY.md).
 
 ## Status
 
-Pre-alpha. Build order and acceptance gates: [`docs/ROADMAP.md`](docs/ROADMAP.md).
+Pre-alpha. **M1 (retrieval quality) complete**: source-aware chunking with
+contextual blurbs, hybrid retrieval (BM25 + dense + RRF fusion + cross-encoder
+rerank behind the `ml` extra), and a golden-set eval harness wired as a
+**blocking CI regression gate** — Recall@10 0.95 / nDCG@10 0.91 on the held-out
+split. M0 (skeleton vertical slice) shipped dense-only `/v1/search` with
+end-to-end tracing. Build order and acceptance gates:
+[`docs/ROADMAP.md`](docs/ROADMAP.md).

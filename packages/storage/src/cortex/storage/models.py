@@ -11,8 +11,8 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import ForeignKey, Index, UniqueConstraint, func
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import Computed, ForeignKey, Index, UniqueConstraint, func
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -78,5 +78,14 @@ class Chunk(Base):
     vector_id: Mapped[uuid.UUID] = mapped_column(default=uuid.uuid4)  # Qdrant point id
     content_hash: Mapped[str]
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    # Generated in Postgres (migration 0003); GIN-indexed for the BM25 path.
+    text_tsv: Mapped[str | None] = mapped_column(
+        TSVECTOR,
+        Computed(
+            "to_tsvector('english', coalesce(context_blurb, '') || ' ' || text)",
+            persisted=True,
+        ),
+        nullable=True,
+    )
 
     artifact: Mapped[Artifact] = relationship(back_populates="chunks")

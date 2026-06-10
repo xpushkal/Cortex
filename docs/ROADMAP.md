@@ -116,7 +116,8 @@ scripted task with every action traceable to a cited process step.
 - Engineered async, idempotent, rate-limited ingestion sustaining **[N] docs/min/worker**
   across [k] source connectors with a change-driven freshness loop.
 - Built a hybrid retrieval stack (BM25 + dense + cross-encoder rerank) hitting
-  **Recall@10 [X] / nDCG@10 [Y]**, guarded by a CI eval-regression gate.
+  **Recall@10 0.95 / nDCG@10 0.91** (held-out golden set, M1 baseline stack),
+  guarded by a blocking CI eval-regression gate.
 - Fine-tuned domain embeddings (contrastive + hard-negative mining) for **+[Z]%
   Recall@10** over the off-the-shelf baseline.
 - Designed multi-tenant infra (sharded vector store, per-tenant/per-source rate

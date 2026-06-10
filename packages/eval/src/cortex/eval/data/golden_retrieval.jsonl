@@ -1,0 +1,42 @@
+{"query": "how do I issue a refund over $500", "relevant": [["doc-refund-policy", 0], ["doc-support-handbook", 1]], "split": "dev"}
+{"query": "refund approval process for large amounts", "relevant": [["doc-refund-policy", 0], ["doc-support-handbook", 1]], "split": "test"}
+{"query": "who approves refunds above the support limit", "relevant": [["doc-refund-policy", 0], ["doc-support-handbook", 1]], "split": "dev"}
+{"query": "finance team refund eligibility review timeline", "relevant": [["doc-refund-policy", 0]], "split": "test"}
+{"query": "what to do during a sev1 incident", "relevant": [["msg-incident-escalation", 0]], "split": "dev"}
+{"query": "paging the on-call engineer for an incident", "relevant": [["msg-incident-escalation", 0]], "split": "test"}
+{"query": "incident commander owns communications until resolution", "relevant": [["msg-incident-escalation", 0]], "split": "test"}
+{"query": "discount approval thresholds", "relevant": [["doc-pricing-exception", 0]], "split": "dev"}
+{"query": "who signs off on a 45 percent discount", "relevant": [["doc-pricing-exception", 0]], "split": "test"}
+{"query": "record pricing exceptions in the deal desk spreadsheet", "relevant": [["doc-pricing-exception", 0]], "split": "dev"}
+{"query": "how to request vacation time", "relevant": [["doc-pto-policy", 0]], "split": "dev"}
+{"query": "does unused PTO roll over to next year", "relevant": [["doc-pto-policy", 0]], "split": "test"}
+{"query": "submitting receipts for reimbursement", "relevant": [["doc-expense-reimbursement", 0]], "split": "dev"}
+{"query": "expense auto approval limit under 75 dollars", "relevant": [["doc-expense-reimbursement", 0]], "split": "test"}
+{"query": "steps after a customer signs the contract", "relevant": [["doc-customer-onboarding", 0]], "split": "dev"}
+{"query": "scheduling the kickoff call for a new customer", "relevant": [["doc-customer-onboarding", 0]], "split": "test"}
+{"query": "send welcome email and create workspace for onboarding", "relevant": [["doc-customer-onboarding", 0]], "split": "dev"}
+{"query": "how to report a security vulnerability", "relevant": [["msg-security-disclosure", 0]], "split": "dev"}
+{"query": "responsible disclosure contact for suspected vulnerabilities", "relevant": [["msg-security-disclosure", 0]], "split": "test"}
+{"query": "handling a GDPR deletion request", "relevant": [["doc-data-deletion", 0]], "split": "dev"}
+{"query": "deleting customer data from primary stores and backups", "relevant": [["doc-data-deletion", 0]], "split": "test"}
+{"query": "how production deploys are rolled out", "relevant": [["doc-deploy-process", 0]], "split": "dev"}
+{"query": "feature flag rollout percentage for deploys", "relevant": [["doc-deploy-process", 0]], "split": "test"}
+{"query": "approval for a new vendor contract over 10k", "relevant": [["doc-procurement", 0]], "split": "dev"}
+{"query": "vendor security review requirement", "relevant": [["doc-procurement", 0]], "split": "test"}
+{"query": "when must we cancel a vendor contract before renewal", "relevant": [["doc-procurement", 0], ["email-vendor-renewal", 0]], "split": "test"}
+{"query": "user locked out after failed logins", "relevant": [["msg-account-lockout", 0]], "split": "dev"}
+{"query": "can support unlock an account manually", "relevant": [["msg-account-lockout", 0]], "split": "test"}
+{"query": "password reset link after account lockout", "relevant": [["msg-account-lockout", 0]], "split": "dev"}
+{"query": "code review requirements before merging to main", "relevant": [["doc-code-review", 0]], "split": "dev"}
+{"query": "who reviews security sensitive changes", "relevant": [["doc-code-review", 0]], "split": "test"}
+{"query": "squash merge policy", "relevant": [["doc-code-review", 0]], "split": "test"}
+{"query": "chargeback dispute evidence deadline", "relevant": [["doc-support-handbook", 2]], "split": "dev"}
+{"query": "submitting chargeback evidence through the payment provider", "relevant": [["doc-support-handbook", 2]], "split": "test"}
+{"query": "goodwill account credit limit per customer", "relevant": [["doc-support-handbook", 3]], "split": "test"}
+{"query": "log account credits in billing notes with a reason code", "relevant": [["doc-support-handbook", 3]], "split": "dev"}
+{"query": "what happened with the $750 refund request in billing", "relevant": [["msg-refund-thread", 0]], "split": "dev"}
+{"query": "FIN-2291", "relevant": [["msg-refund-thread", 0]], "split": "test"}
+{"query": "acme analytics contract renewal date", "relevant": [["email-vendor-renewal", 0]], "split": "dev"}
+{"query": "what does ERR-4031 mean", "relevant": [["doc-api-error-codes", 0]], "split": "dev"}
+{"query": "ERR-5022", "relevant": [["doc-api-error-codes", 0]], "split": "test"}
+{"query": "error code for ingestion rate limit exceeded", "relevant": [["doc-api-error-codes", 0]], "split": "test"}

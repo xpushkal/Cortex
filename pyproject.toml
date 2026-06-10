@@ -22,6 +22,7 @@ dependencies = [
     "cortex-knowledge",
     "cortex-eval",
     "cortex-storage",
+    "cortex-obs",
 ]
 
 [dependency-groups]
@@ -54,6 +55,7 @@ cortex-retrieval = { workspace = true }
 cortex-knowledge = { workspace = true }
 cortex-eval = { workspace = true }
 cortex-storage = { workspace = true }
+cortex-obs = { workspace = true }
 
 # ---------------------------------------------------------------------------
 # Linting & formatting (ruff)
@@ -95,6 +97,7 @@ mypy_path = [
     "packages/knowledge/src",
     "packages/eval/src",
     "packages/storage/src",
+    "packages/obs/src",
 ]
 strict = true
 warn_unused_configs = true
@@ -105,9 +108,9 @@ warn_unused_ignores = true
 module = ["tests.*"]
 disallow_untyped_defs = false
 
-# Optional ML deps (the `ml`/`onnx` extras) ship no type stubs.
+# Optional deps (the `ml`/`onnx`/`llm` extras) absent from the base env.
 [[tool.mypy.overrides]]
-module = ["sentence_transformers.*", "torch.*", "onnxruntime.*"]
+module = ["sentence_transformers.*", "torch.*", "onnxruntime.*", "anthropic.*"]
 ignore_missing_imports = true
 
 # ---------------------------------------------------------------------------
@@ -117,6 +120,10 @@ ignore_missing_imports = true
 minversion = "8.0"
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# One event loop for the whole session so cached async engines/clients (which bind
+# to the loop active at first use) stay valid across tests.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
 addopts = "-ra --strict-markers"
 markers = [
     "integration: needs live Postgres/Qdrant/Redis (compose or testcontainers)",

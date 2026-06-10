@@ -64,19 +64,44 @@ jobs:
         run: uv run pytest --cov --cov-report=term-missing
 
   eval-gate:
-    name: eval gate (advisory)
+    name: eval gate (blocking)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: cortex
+          POSTGRES_PASSWORD: cortex
+          POSTGRES_DB: cortex
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U cortex" --health-interval 5s
+          --health-timeout 3s --health-retries 10
+      qdrant:
+        image: qdrant/qdrant:latest
+        ports: ["6333:6333"]
     env:
-      # Flip to "blocking" once a credible golden set exists (docs/TEST-STRATEGY.md).
-      EVAL_GATE: advisory
+      POSTGRES_DSN: postgresql+asyncpg://cortex:cortex@localhost:5432/cortex
+      QDRANT_URL: http://localhost:6333
+      # Blocking since M1: a regression below docs/RETRIEVAL_AND_ML.md §5.4 fails the build.
+      EVAL_GATE: blocking
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
       - run: uv sync --all-extras
+      - name: migrate
+        run: uv run alembic upgrade head
       - name: retrieval/extraction quality gate
         run: uv run pytest -m eval
+      - name: upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: .eval-reports/
+          if-no-files-found: ignore
 
   build-images:
     name: build images

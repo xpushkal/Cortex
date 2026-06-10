@@ -6,7 +6,13 @@ requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.7",
     "numpy>=1.26",
+    "cortex-retrieval",
+    "cortex-storage",
 ]
+
+[tool.uv.sources]
+cortex-retrieval = { workspace = true }
+cortex-storage = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
