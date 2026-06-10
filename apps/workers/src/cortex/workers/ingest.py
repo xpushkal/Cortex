@@ -127,7 +127,7 @@ async def ingest_source(
             await session.flush()
             stats.artifacts += 1
 
-            texts = chunk(art.content, source_kind=art.source_kind)
+            texts = chunk(art.content, source_kind=art.source_kind, artifact_kind=art.kind)
             embeddings = embedder.embed(texts)
             created_at = int(art.created_at.timestamp())
             for ordinal, (text, vector) in enumerate(zip(texts, embeddings, strict=True)):
