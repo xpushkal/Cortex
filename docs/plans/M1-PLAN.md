@@ -1,6 +1,6 @@
 # M1 Plan — Retrieval Quality
 
-**Status:** Active
+**Status:** Complete (2026-06-10) — Recall@10 0.952 / nDCG@10 0.908 on the held-out test split; blocking gate + regression canary green.
 **Branch:** `M1`
 **Roadmap gate (done-when):** Recall@10 ≥ 0.85 **and** nDCG@10 ≥ 0.70 on the
 held-out golden set, and a deliberate quality regression fails CI.
