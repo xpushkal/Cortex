@@ -22,7 +22,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cortex.connectors import SampleConnector
 from cortex.connectors.base import Connector, SourceConfig
-from cortex.knowledge import ChunkRef, Extractor, get_extractor
+from cortex.knowledge import (
+    ChunkRef,
+    Extractor,
+    get_extractor,
+    mark_processes_stale_for_artifact,
+)
 from cortex.obs import get_tracer, init_tracing
 from cortex.retrieval import chunk, get_blurb_generator, get_embedder
 from cortex.retrieval.blurb import ArtifactContext, artifact_head
@@ -120,7 +125,15 @@ async def ingest_source(
                 continue
 
             if existing is not None:
-                # Content changed: drop stale chunks (Postgres cascade + Qdrant points).
+                # Content changed (M3): mark processes that cite this artifact stale
+                # BEFORE dropping its chunks (citations cascade with the chunks).
+                await mark_processes_stale_for_artifact(
+                    session,
+                    tenant_id=tenant_id,
+                    artifact_id=existing.id,
+                    reason=f"source artifact {art.external_id} changed",
+                )
+                # Drop stale chunks (Postgres cascade + Qdrant points).
                 await delete_artifact_points(qclient, tenant_id=tenant_id, artifact_id=existing.id)
                 await session.delete(existing)
                 await session.flush()

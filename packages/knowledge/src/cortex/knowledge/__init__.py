@@ -4,16 +4,16 @@ Entity/relation extraction into the graph, and the product's core unit: the
 versioned, source-cited **process object**. See docs/DATA_MODEL.md §5.
 """
 
+from cortex.knowledge.contradiction import (
+    ContradictionReport,
+    StepConflict,
+    detect_contradiction,
+)
 from cortex.knowledge.extraction import (
     HeuristicProcessSynth,
     ProcessSynth,
     extract_processes,
     get_process_synth,
-)
-from cortex.knowledge.contradiction import (
-    ContradictionReport,
-    StepConflict,
-    detect_contradiction,
 )
 from cortex.knowledge.faithfulness import coverage, is_faithful
 from cortex.knowledge.freshness import (
@@ -54,16 +54,17 @@ from cortex.knowledge.repository import (
 from cortex.knowledge.resolution import resolve_entities
 
 __all__ = [
+    "EXPIRED",
+    "FRESH",
+    "PROCESS_TTL_SECONDS",
+    "STALE",
     "ChunkRef",
     "Citation",
     "ContradictionReport",
-    "EXPIRED",
     "EntityCandidate",
     "Extractor",
-    "FRESH",
     "HeuristicExtractor",
     "HeuristicProcessSynth",
-    "PROCESS_TTL_SECONDS",
     "Process",
     "ProcessCluster",
     "ProcessStep",
@@ -71,7 +72,6 @@ __all__ = [
     "ProcessSynth",
     "RelationCandidate",
     "ResolvedEntity",
-    "STALE",
     "StepConflict",
     "coverage",
     "detect_contradiction",
