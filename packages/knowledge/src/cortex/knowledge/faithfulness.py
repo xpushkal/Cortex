@@ -17,11 +17,12 @@ from __future__ import annotations
 import re
 
 _TOKEN = re.compile(r"[a-z0-9$]+")
-_STOPWORDS = frozenset(
+_STOPWORD_WORDS = (
     "a an the of to and or for in on at by is are be been being it its this that "
     "with as from into within then than must should can may will if any every all "
-    "before after once each per via not no".split()
+    "before after once each per via not no"
 )
+_STOPWORDS = frozenset(_STOPWORD_WORDS.split())
 
 
 def _salient(text: str) -> set[str]:

@@ -35,14 +35,15 @@ _SYNTH_MODEL = "claude-opus-4-8"
 
 # Verb/modal cues that mark a sentence as a procedural step (vs. a title or
 # definition). A general signal, not memorized sample text.
-_ACTION_CUES = frozenset(
+_ACTION_WORDS = (
     "issue issued issues route routed routes review reviews reviewed approve approves "
     "approved submit submitted verify verifies verified escalate escalates page pages "
     "create creates send sends assign assigns delete deletes merge merged request "
     "requests schedule schedules record records report reports trigger triggers promote "
     "lock locked reset cancel cancelled coordinate notify confirm confirms must require "
-    "requires".split()
+    "requires"
 )
+_ACTION_CUES = frozenset(_ACTION_WORDS.split())
 
 _SENTENCE = re.compile(r"(?<=[.!?])\s+|\n+")
 

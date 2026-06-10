@@ -26,6 +26,14 @@ from cortex.knowledge.models import (
     RelationCandidate,
     ResolvedEntity,
 )
+from cortex.knowledge.repository import (
+    ProcessSummary,
+    get_process_body,
+    get_process_versions,
+    list_processes,
+    save_graph,
+    save_process,
+)
 from cortex.knowledge.resolution import resolve_entities
 
 __all__ = [
@@ -38,13 +46,19 @@ __all__ = [
     "Process",
     "ProcessCluster",
     "ProcessStep",
+    "ProcessSummary",
     "ProcessSynth",
     "RelationCandidate",
     "ResolvedEntity",
     "coverage",
     "extract_processes",
     "get_extractor",
+    "get_process_body",
     "get_process_synth",
+    "get_process_versions",
     "is_faithful",
+    "list_processes",
     "resolve_entities",
+    "save_graph",
+    "save_process",
 ]
