@@ -1,6 +1,6 @@
 # M3 Plan — Freshness Loop
 
-**Status:** Active
+**Status:** Complete (2026-06-11) — change-driven re-ingest + freshness table + TTL sweep + contradiction detection; freshness surfaced in /ask and /processes. Done-when verified end-to-end (eval): change retrievable immediately, dependents marked stale, no stale/expired served unlabeled.
 **Branch:** `M3`
 **Roadmap gate (done-when):** a change to a source artifact is retrievable in
 < 60 s (webhook path) and dependent process objects are correctly marked

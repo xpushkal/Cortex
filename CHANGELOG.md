@@ -8,6 +8,27 @@ derived from [Conventional Commits](https://www.conventionalcommits.org/) on
 
 ## [Unreleased]
 
+### Added — M3 (freshness loop)
+- `freshness` table (migration `0005`): per-object state (fresh | stale |
+  expired) + TTL, the source of truth for serving; orthogonal to
+  `process.status`.
+- Freshness repository: `set_freshness`, `get_freshness_map`,
+  `mark_processes_stale_for_artifact`, `revalidate_process`, and a tenant-agnostic
+  `ttl_sweep`. Contradiction detection (`detect_contradiction`) flags a changed
+  approver/threshold between process versions.
+- Change-driven re-ingest: on a content change, dependent processes are marked
+  stale **before** their chunks are dropped; re-extraction records any
+  contradiction under `body.review` and marks the process stale + draft.
+- TTL sweep job (`python -m cortex.workers.freshness_sweep`, `just sweep`)
+  expires knowledge past its TTL.
+- `POST /v1/ingest/events` (incremental-sync webhook path; changes queryable
+  immediately) and `POST /v1/processes/{id}/review` (approve → active + fresh,
+  closing the staleness loop).
+- Freshness surfaced in serving: `/v1/processes` labels each process
+  fresh/stale/expired; `/v1/ask` refuses to ground in an expired process (chunk
+  fallback) and labels the answer's freshness — **no stale data served
+  unlabeled**. Done-when verified end-to-end by eval-marked tests.
+
 ### Added — M2 (knowledge structuring)
 - Knowledge graph (migration `0004`): tenant-scoped `entities`,
   `entity_mentions` (provenance), and `relations` (subject/predicate/object with
