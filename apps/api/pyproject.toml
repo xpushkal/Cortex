@@ -16,12 +16,14 @@ dependencies = [
     "opentelemetry-instrumentation-fastapi>=0.48b0",
     "cortex-storage",
     "cortex-retrieval",
+    "cortex-knowledge",
     "cortex-obs",
 ]
 
 [tool.uv.sources]
 cortex-storage = { workspace = true }
 cortex-retrieval = { workspace = true }
+cortex-knowledge = { workspace = true }
 cortex-obs = { workspace = true }
 
 [build-system]

@@ -1,0 +1,11 @@
+{"name_contains": "Refund policy", "steps": ["refunds issued directly by a support agent", "refund over $500 routed to the finance team for approval", "finance reviews eligibility and the original payment method"], "actors": ["finance team"]}
+{"name_contains": "On-call runbook", "steps": ["page the on-call engineer via PagerDuty", "open a #incident channel", "escalate to the engineering manager if not acknowledged"], "actors": ["engineering manager"]}
+{"name_contains": "Pricing exceptions", "steps": ["discounts above 20% require approval from the VP of Sales", "discounts above 40% require the CFO to sign off", "record every exception in the deal desk spreadsheet"], "actors": ["vp of sales"]}
+{"name_contains": "Time off", "steps": ["employees request PTO in the HR portal", "the direct manager approves or declines"], "actors": ["direct manager"]}
+{"name_contains": "Expense reimbursement", "steps": ["submit receipts in Expensify within 30 days", "expenses higher than $75 need manager approval"], "actors": ["manager"]}
+{"name_contains": "Customer onboarding", "steps": ["create the workspace and send the welcome email", "schedule a kickoff call within 3 business days", "assign a customer success manager"], "actors": ["customer success manager"]}
+{"name_contains": "Data deletion", "steps": ["verify identity and locate all records by tenant id", "delete from primary stores and backups within 30 days", "send written confirmation once complete"], "actors": []}
+{"name_contains": "Production deploys", "steps": ["merge to main triggers CI and a green build is required", "deploys roll to 10% of traffic behind a feature flag"], "actors": []}
+{"name_contains": "Vendor procurement", "steps": ["new vendors over $10k require a security review", "approval from the head of finance"], "actors": ["head of finance"]}
+{"name_contains": "Code review", "steps": ["every change needs one approving review and a green CI run", "security-sensitive changes require review from the security owner"], "actors": ["security owner"]}
+{"name_contains": "Support handbook", "steps": ["agents issue refunds up to $500 in the admin panel", "larger refunds go to finance with the order id", "submit chargeback evidence through the payment provider dashboard"], "actors": []}

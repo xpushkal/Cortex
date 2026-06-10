@@ -20,6 +20,50 @@ class Citation(BaseModel):
     quote: str | None = None
 
 
+class EntityCandidate(BaseModel):
+    """An entity observed in a chunk, before resolution into the graph (M2)."""
+
+    name: str
+    type: str  # person | team | role | system | policy | product | customer | ...
+    source_chunk_id: str
+    confidence: float = 1.0
+
+
+class RelationCandidate(BaseModel):
+    """A subject->predicate->object edge observed in a chunk, with provenance (M2)."""
+
+    subject: str  # entity name
+    predicate: str  # approves | requires_approval_from | escalates_to | owns | ...
+    object: str  # entity name
+    source_chunk_id: str
+    confidence: float = 1.0
+
+
+class ResolvedEntity(BaseModel):
+    """A canonical entity after alias-merging candidates (docs/RETRIEVAL_AND_ML.md §4.1)."""
+
+    name: str  # canonical surface form
+    type: str
+    aliases: list[str] = Field(default_factory=list)  # all observed surface forms
+    chunk_ids: list[str] = Field(default_factory=list)  # provenance (deduped)
+    confidence: float = 1.0
+
+
+class ChunkRef(BaseModel):
+    """A chunk's id + text — the unit a process step cites and is checked against."""
+
+    chunk_id: str
+    text: str
+
+
+class ProcessCluster(BaseModel):
+    """A set of chunks describing one recurring task, fed to process synthesis (M2)."""
+
+    name: str
+    trigger: str
+    chunks: list[ChunkRef]
+
+
 class ProcessStep(BaseModel):
     """One imperative step in a process. Must be grounded by >=1 citation."""
 

@@ -146,9 +146,9 @@ just dev           # uvicorn cortex.api.main:app --reload
 curl -s localhost:8000/healthz   # -> {"status":"ok"}
 ```
 
-`/v1/search` (hybrid, tenant-filtered) is live; `/ask` · `/processes` ·
-`/skills` land in **M2+** (see [`docs/ROADMAP.md`](docs/ROADMAP.md)). Run `just`
-to list all developer tasks.
+`/v1/search` (hybrid), `/v1/ask` (grounded), and `/v1/processes` are live,
+all tenant-filtered; `/v1/skills` export lands in **M6** (see
+[`docs/ROADMAP.md`](docs/ROADMAP.md)). Run `just` to list all developer tasks.
 
 ---
 
@@ -163,10 +163,11 @@ and quality gate are in [`docs/TEST-STRATEGY.md`](docs/TEST-STRATEGY.md).
 
 ## Status
 
-Pre-alpha. **M1 (retrieval quality) complete**: source-aware chunking with
-contextual blurbs, hybrid retrieval (BM25 + dense + RRF fusion + cross-encoder
-rerank behind the `ml` extra), and a golden-set eval harness wired as a
-**blocking CI regression gate** — Recall@10 0.95 / nDCG@10 0.91 on the held-out
-split. M0 (skeleton vertical slice) shipped dense-only `/v1/search` with
-end-to-end tracing. Build order and acceptance gates:
-[`docs/ROADMAP.md`](docs/ROADMAP.md).
+Pre-alpha. **M2 (knowledge structuring) complete**: a provenance-tracked
+entity/relation graph, entity resolution, and versioned **process objects** —
+every step source-cited and faithfulness-gated — served via `/v1/processes` and
+process-grounded `/v1/ask`. Citation validity is a **blocking CI gate** (1.00 —
+every shipped step validly cited); process recall 0.89 on the golden set. M1
+(retrieval quality) shipped hybrid retrieval (BM25 + dense + RRF + rerank) at
+Recall@10 0.95 / nDCG@10 0.91; M0 the dense-only vertical slice. Build order and
+acceptance gates: [`docs/ROADMAP.md`](docs/ROADMAP.md).

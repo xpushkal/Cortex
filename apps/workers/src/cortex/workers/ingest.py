@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cortex.connectors import SampleConnector
 from cortex.connectors.base import Connector, SourceConfig
+from cortex.knowledge import ChunkRef, Extractor, get_extractor
 from cortex.obs import get_tracer, init_tracing
 from cortex.retrieval import chunk, get_blurb_generator, get_embedder
 from cortex.retrieval.blurb import ArtifactContext, artifact_head
@@ -38,6 +39,7 @@ from cortex.storage import (
     resolve_tenant,
     upsert_chunks,
 )
+from cortex.workers.enrich import enrich_artifact
 
 CONNECTORS: dict[str, type[Connector]] = {"sample": SampleConnector}
 _tracer = get_tracer(__name__)
@@ -76,12 +78,18 @@ async def ingest_source(
     dsn: str | None = None,
     qdrant_url: str | None = None,
     embedder: Embedder | None = None,
+    extractor: Extractor | None = None,
 ) -> IngestStats:
-    """Backfill a connector into Postgres + Qdrant for one tenant. Idempotent."""
+    """Backfill a connector into Postgres + Qdrant for one tenant. Idempotent.
+
+    Per artifact: chunk -> blurb -> embed -> persist chunks/vectors, then extract
+    the knowledge graph + process objects (M2) within the same transaction.
+    """
     span = _tracer.start_span(f"ingest.{connector.kind}")
     span.set_attribute("cortex.tenant_id", str(tenant_id))
     embedder = embedder or get_embedder()
     blurber = get_blurb_generator()
+    extractor = extractor or get_extractor()
     qclient = get_qdrant(qdrant_url)
     await ensure_collection(qclient, dim=embedder.dim)
 
@@ -145,6 +153,7 @@ async def ingest_source(
                 ]
             )
             created_at = int(art.created_at.timestamp())
+            chunk_refs: list[ChunkRef] = []
             for ordinal, (text, blurb, vector) in enumerate(
                 zip(texts, blurbs, embeddings, strict=True)
             ):
@@ -159,6 +168,7 @@ async def ingest_source(
                 )
                 session.add(row)
                 await session.flush()
+                chunk_refs.append(ChunkRef(chunk_id=str(row.id), text=text))
                 vectors.append(
                     ChunkVector(
                         vector_id=row.vector_id,
@@ -174,6 +184,17 @@ async def ingest_source(
                     )
                 )
                 stats.chunks += 1
+
+            # M2: extract the graph + cited process objects for this artifact.
+            head = artifact_head(art.content)
+            await enrich_artifact(
+                session,
+                tenant_id=tenant_id,
+                name=head,
+                trigger=f"Relevant when handling: {head}",
+                chunks=chunk_refs,
+                extractor=extractor,
+            )
 
         await session.commit()
 
