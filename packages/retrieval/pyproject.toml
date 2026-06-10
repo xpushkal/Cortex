@@ -6,7 +6,13 @@ requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.7",
     "qdrant-client>=1.11",
+    "cortex-storage",
+    "cortex-obs",
 ]
+
+[tool.uv.sources]
+cortex-storage = { workspace = true }
+cortex-obs = { workspace = true }
 
 [project.optional-dependencies]
 # Heavy ML deps kept optional so base `uv sync` stays fast. Install with
