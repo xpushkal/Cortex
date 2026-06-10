@@ -27,7 +27,7 @@ def test_heuristic_synth_emits_cited_steps() -> None:
     assert proc is not None
     assert len(proc.steps) >= 2
     # The title sentence ("Refund policy.") is not procedural -> excluded.
-    assert all("Refund policy." != s.action for s in proc.steps)
+    assert all(s.action != "Refund policy." for s in proc.steps)
     # Every step cites the source chunk (the citation invariant, by construction).
     assert all(s.citations[0].chunk_id == "chunk-refund" for s in proc.steps)
 

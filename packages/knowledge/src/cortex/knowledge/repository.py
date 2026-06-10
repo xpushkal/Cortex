@@ -12,6 +12,7 @@ side (`list_processes`, `get_process_body`, `get_process_versions`) backs the
 
 from __future__ import annotations
 
+import re
 import uuid
 from typing import Any
 
@@ -312,6 +313,46 @@ async def get_process_body(
             )
         )
     ).scalar_one()
+    return {**version.body, "id": str(proc.id), "status": proc.status}
+
+
+_WORD = re.compile(r"[a-z0-9$]+")
+
+
+def _tokens(text: str) -> set[str]:
+    return {t for t in _WORD.findall(text.lower()) if len(t) > 2}
+
+
+async def match_process(
+    session: AsyncSession, *, tenant_id: uuid.UUID, query: str
+) -> dict[str, Any] | None:
+    """Return the active process whose name+trigger best overlaps the query, or None.
+
+    A lightweight lexical match: the active process sharing the most salient
+    tokens with the query grounds `/ask`. None when nothing overlaps (the
+    endpoint then falls back to raw chunk retrieval).
+    """
+    rows = (
+        await session.execute(
+            sa.select(ProcessRow, ProcessVersionRow)
+            .join(
+                ProcessVersionRow,
+                (ProcessVersionRow.process_id == ProcessRow.id)
+                & (ProcessVersionRow.version == ProcessRow.current_version),
+            )
+            .where(ProcessRow.tenant_id == tenant_id, ProcessRow.status == "active")
+        )
+    ).all()
+    q_tokens = _tokens(query)
+    best: tuple[ProcessRow, ProcessVersionRow] | None = None
+    best_score = 0
+    for proc, version in rows:
+        score = len(q_tokens & _tokens(f"{proc.name} {proc.trigger}"))
+        if score > best_score:
+            best_score, best = score, (proc, version)
+    if best is None:
+        return None
+    proc, version = best
     return {**version.body, "id": str(proc.id), "status": proc.status}
 
 

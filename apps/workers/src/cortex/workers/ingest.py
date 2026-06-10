@@ -27,7 +27,6 @@ from cortex.obs import get_tracer, init_tracing
 from cortex.retrieval import chunk, get_blurb_generator, get_embedder
 from cortex.retrieval.blurb import ArtifactContext, artifact_head
 from cortex.retrieval.embedding import Embedder
-from cortex.workers.enrich import enrich_artifact
 from cortex.storage import (
     Artifact,
     Chunk,
@@ -40,6 +39,7 @@ from cortex.storage import (
     resolve_tenant,
     upsert_chunks,
 )
+from cortex.workers.enrich import enrich_artifact
 
 CONNECTORS: dict[str, type[Connector]] = {"sample": SampleConnector}
 _tracer = get_tracer(__name__)

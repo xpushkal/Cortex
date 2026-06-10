@@ -31,6 +31,7 @@ from cortex.knowledge.repository import (
     get_process_body,
     get_process_versions,
     list_processes,
+    match_process,
     save_graph,
     save_process,
 )
@@ -58,6 +59,7 @@ __all__ = [
     "get_process_versions",
     "is_faithful",
     "list_processes",
+    "match_process",
     "resolve_entities",
     "save_graph",
     "save_process",
