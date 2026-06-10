@@ -23,7 +23,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from cortex.connectors import SampleConnector
 from cortex.connectors.base import Connector, SourceConfig
 from cortex.obs import get_tracer, init_tracing
-from cortex.retrieval import chunk, get_embedder
+from cortex.retrieval import chunk, get_blurb_generator, get_embedder
+from cortex.retrieval.blurb import ArtifactContext, artifact_head
 from cortex.retrieval.embedding import Embedder
 from cortex.storage import (
     Artifact,
@@ -80,6 +81,7 @@ async def ingest_source(
     span = _tracer.start_span(f"ingest.{connector.kind}")
     span.set_attribute("cortex.tenant_id", str(tenant_id))
     embedder = embedder or get_embedder()
+    blurber = get_blurb_generator()
     qclient = get_qdrant(qdrant_url)
     await ensure_collection(qclient, dim=embedder.dim)
 
@@ -128,14 +130,30 @@ async def ingest_source(
             stats.artifacts += 1
 
             texts = chunk(art.content, source_kind=art.source_kind, artifact_kind=art.kind)
-            embeddings = embedder.embed(texts)
+            ctx = ArtifactContext(
+                source_kind=art.source_kind,
+                artifact_kind=art.kind,
+                external_id=art.external_id,
+                head=artifact_head(art.content),
+            )
+            blurbs = blurber.generate(ctx, texts)
+            # Contextual retrieval: embed blurb + text; serve/store the raw text.
+            embeddings = embedder.embed(
+                [
+                    f"{blurb}\n\n{text}" if blurb else text
+                    for text, blurb in zip(texts, blurbs, strict=True)
+                ]
+            )
             created_at = int(art.created_at.timestamp())
-            for ordinal, (text, vector) in enumerate(zip(texts, embeddings, strict=True)):
+            for ordinal, (text, blurb, vector) in enumerate(
+                zip(texts, blurbs, embeddings, strict=True)
+            ):
                 row = Chunk(
                     tenant_id=tenant_id,
                     artifact_id=artifact.id,
                     ordinal=ordinal,
                     text=text,
+                    context_blurb=blurb or None,
                     token_count=len(text.split()),
                     content_hash=_hash(text),
                 )

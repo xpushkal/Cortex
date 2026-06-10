@@ -497,6 +497,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+llm = [
+    { name = "anthropic" },
+]
 ml = [
     { name = "sentence-transformers" },
     { name = "torch" },
@@ -507,13 +510,14 @@ onnx = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anthropic", marker = "extra == 'llm'", specifier = ">=0.50" },
     { name = "onnxruntime", marker = "extra == 'onnx'", specifier = ">=1.18" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "qdrant-client", specifier = ">=1.11" },
     { name = "sentence-transformers", marker = "extra == 'ml'", specifier = ">=3.0" },
     { name = "torch", marker = "extra == 'ml'", specifier = ">=2.3" },
 ]
-provides-extras = ["ml", "onnx"]
+provides-extras = ["ml", "llm", "onnx"]
 
 [[package]]
 name = "cortex-storage"

@@ -12,6 +12,8 @@ dependencies = [
 # Heavy ML deps kept optional so base `uv sync` stays fast. Install with
 # `uv sync --extra ml` (or --all-extras) when working on embeddings/rerank.
 ml = ["sentence-transformers>=3.0", "torch>=2.3"]
+# LLM-generated contextual blurbs (CORTEX_BLURB_MODE=llm); template mode needs nothing.
+llm = ["anthropic>=0.50"]
 onnx = ["onnxruntime>=1.18"]
 
 [build-system]
