@@ -8,11 +8,13 @@ dependencies = [
     "numpy>=1.26",
     "cortex-retrieval",
     "cortex-storage",
+    "cortex-knowledge",
 ]
 
 [tool.uv.sources]
 cortex-retrieval = { workspace = true }
 cortex-storage = { workspace = true }
+cortex-knowledge = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

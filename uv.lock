@@ -442,6 +442,7 @@ name = "cortex-eval"
 version = "0.0.0"
 source = { editable = "packages/eval" }
 dependencies = [
+    { name = "cortex-knowledge" },
     { name = "cortex-retrieval" },
     { name = "cortex-storage" },
     { name = "numpy" },
@@ -450,6 +451,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cortex-knowledge", editable = "packages/knowledge" },
     { name = "cortex-retrieval", editable = "packages/retrieval" },
     { name = "cortex-storage", editable = "packages/storage" },
     { name = "numpy", specifier = ">=1.26" },
