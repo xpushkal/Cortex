@@ -4,6 +4,26 @@ Entity/relation extraction into the graph, and the product's core unit: the
 versioned, source-cited **process object**. See docs/DATA_MODEL.md §5.
 """
 
-from cortex.knowledge.models import Citation, Process, ProcessStep
+from cortex.knowledge.graph import (
+    Extractor,
+    HeuristicExtractor,
+    get_extractor,
+)
+from cortex.knowledge.models import (
+    Citation,
+    EntityCandidate,
+    Process,
+    ProcessStep,
+    RelationCandidate,
+)
 
-__all__ = ["Citation", "Process", "ProcessStep"]
+__all__ = [
+    "Citation",
+    "EntityCandidate",
+    "Extractor",
+    "HeuristicExtractor",
+    "Process",
+    "ProcessStep",
+    "RelationCandidate",
+    "get_extractor",
+]

@@ -20,6 +20,25 @@ class Citation(BaseModel):
     quote: str | None = None
 
 
+class EntityCandidate(BaseModel):
+    """An entity observed in a chunk, before resolution into the graph (M2)."""
+
+    name: str
+    type: str  # person | team | role | system | policy | product | customer | ...
+    source_chunk_id: str
+    confidence: float = 1.0
+
+
+class RelationCandidate(BaseModel):
+    """A subject->predicate->object edge observed in a chunk, with provenance (M2)."""
+
+    subject: str  # entity name
+    predicate: str  # approves | requires_approval_from | escalates_to | owns | ...
+    object: str  # entity name
+    source_chunk_id: str
+    confidence: float = 1.0
+
+
 class ProcessStep(BaseModel):
     """One imperative step in a process. Must be grounded by >=1 citation."""
 
