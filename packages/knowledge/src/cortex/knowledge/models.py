@@ -39,6 +39,16 @@ class RelationCandidate(BaseModel):
     confidence: float = 1.0
 
 
+class ResolvedEntity(BaseModel):
+    """A canonical entity after alias-merging candidates (docs/RETRIEVAL_AND_ML.md §4.1)."""
+
+    name: str  # canonical surface form
+    type: str
+    aliases: list[str] = Field(default_factory=list)  # all observed surface forms
+    chunk_ids: list[str] = Field(default_factory=list)  # provenance (deduped)
+    confidence: float = 1.0
+
+
 class ProcessStep(BaseModel):
     """One imperative step in a process. Must be grounded by >=1 citation."""
 

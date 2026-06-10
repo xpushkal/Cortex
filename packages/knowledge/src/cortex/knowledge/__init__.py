@@ -15,7 +15,9 @@ from cortex.knowledge.models import (
     Process,
     ProcessStep,
     RelationCandidate,
+    ResolvedEntity,
 )
+from cortex.knowledge.resolution import resolve_entities
 
 __all__ = [
     "Citation",
@@ -25,5 +27,7 @@ __all__ = [
     "Process",
     "ProcessStep",
     "RelationCandidate",
+    "ResolvedEntity",
     "get_extractor",
+    "resolve_entities",
 ]
