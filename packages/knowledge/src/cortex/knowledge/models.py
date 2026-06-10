@@ -49,6 +49,21 @@ class ResolvedEntity(BaseModel):
     confidence: float = 1.0
 
 
+class ChunkRef(BaseModel):
+    """A chunk's id + text — the unit a process step cites and is checked against."""
+
+    chunk_id: str
+    text: str
+
+
+class ProcessCluster(BaseModel):
+    """A set of chunks describing one recurring task, fed to process synthesis (M2)."""
+
+    name: str
+    trigger: str
+    chunks: list[ChunkRef]
+
+
 class ProcessStep(BaseModel):
     """One imperative step in a process. Must be grounded by >=1 citation."""
 
