@@ -8,6 +8,29 @@ derived from [Conventional Commits](https://www.conventionalcommits.org/) on
 
 ## [Unreleased]
 
+### Added — M2 (knowledge structuring)
+- Knowledge graph (migration `0004`): tenant-scoped `entities`,
+  `entity_mentions` (provenance), and `relations` (subject/predicate/object with
+  `source_chunk_id` + temporal validity), plus the process registry
+  (`processes` -> `process_versions` -> `process_steps`, with `citations`).
+- Entity + relation extraction with provenance: `HeuristicExtractor` (typed
+  org-entity lexicon + relation-cue patterns) by default; `LlmExtractor`
+  (`claude-opus-4-8` structured outputs) behind `CORTEX_EXTRACTOR=llm`.
+- Entity resolution (alias merging): normalized-key + seed synonyms, conservative
+  (never over-merges distinct roles); optional injectable similarity hook.
+- Process extraction: cluster -> synthesize -> Pydantic citation invariant ->
+  **faithfulness gate** (lexical entailment; drops steps the cited chunk doesn't
+  support) -> emit only fully-cited, faithful processes. Version-aware persistence
+  (new process active@v1; changed body -> new draft version, no silent overwrite).
+- Extraction wired into ingestion (graph + cited processes per artifact, in the
+  ingest transaction; idempotent on re-seed) and exposed via `GET /v1/processes`
+  (+ detail + versions) and process-grounded `POST /v1/ask` (extractive default;
+  `CORTEX_ASK=llm` for prose). Every answer carries citations + freshness.
+- Process eval: 11-process golden set, step precision/recall, actor-resolution
+  accuracy, and a **blocking `process_citation_validity` CI gate** (1.00 —
+  every shipped step validly cited) with a dangling-citation canary. Advisory
+  on the deterministic path: recall 0.89, precision 0.78, actor accuracy 0.88.
+
 ### Added — M1 (retrieval quality)
 - Source-aware chunking registry: markdown heading sections (page/doc/pr),
   thread turn-windows (message), quoted-history stripping (email), with the M0

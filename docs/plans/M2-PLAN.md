@@ -1,6 +1,6 @@
 # M2 Plan — Knowledge Structuring
 
-**Status:** Active
+**Status:** Complete (2026-06-11) — citation-validity 1.00 (blocking gate green); process recall 0.89 / precision 0.78, actor-resolution 0.88 on the golden set (deterministic path; advisory). Graph + processes served via /processes and /ask.
 **Branch:** `M2`
 **Roadmap gate (done-when):** process-extraction precision ≥ 0.80 / recall ≥ 0.70
 vs the process golden set, with **100% of shipped steps carrying valid
