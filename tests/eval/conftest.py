@@ -12,6 +12,7 @@ from sqlalchemy import delete, text
 
 from cortex.connectors import SampleConnector
 from cortex.storage import CHUNKS_COLLECTION, Source, get_engine, get_qdrant, get_sessionmaker
+from cortex.storage.models import Entity, EntityMention, Process, Relation
 from cortex.workers.ingest import ingest_source
 
 
@@ -32,6 +33,8 @@ async def seeded_tenant() -> AsyncIterator[uuid.UUID]:
     await ingest_source(SampleConnector(), tenant_id=tenant_id)
     yield tenant_id
     async with get_sessionmaker()() as session:
+        for model in (Relation, EntityMention, Process, Entity):
+            await session.execute(delete(model).where(model.tenant_id == tenant_id))
         await session.execute(delete(Source).where(Source.tenant_id == tenant_id))
         await session.commit()
     await get_qdrant().delete(

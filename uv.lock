@@ -561,6 +561,7 @@ source = { editable = "apps/workers" }
 dependencies = [
     { name = "arq" },
     { name = "cortex-connectors" },
+    { name = "cortex-knowledge" },
     { name = "cortex-obs" },
     { name = "cortex-retrieval" },
     { name = "cortex-storage" },
@@ -573,6 +574,7 @@ dependencies = [
 requires-dist = [
     { name = "arq", specifier = ">=0.26" },
     { name = "cortex-connectors", editable = "packages/connectors" },
+    { name = "cortex-knowledge", editable = "packages/knowledge" },
     { name = "cortex-obs", editable = "packages/obs" },
     { name = "cortex-retrieval", editable = "packages/retrieval" },
     { name = "cortex-storage", editable = "packages/storage" },
