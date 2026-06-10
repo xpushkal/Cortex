@@ -1,8 +1,10 @@
-"""SQLAlchemy ORM models — M0 subset of docs/DATA_MODEL.md.
+"""SQLAlchemy ORM models — docs/DATA_MODEL.md.
 
 All tables carry `tenant_id` (tenant isolation is enforced at the query layer and,
-in M4, by Postgres row-level security). M0 covers the ingestion metadata chain:
-sources -> artifacts -> chunks. Graph/process tables land in M2.
+in M4, by Postgres row-level security). M0 covered the ingestion metadata chain
+(sources -> artifacts -> chunks); M2 adds the knowledge graph (entities,
+entity_mentions, relations) and process registry (processes -> process_versions
+-> process_steps, with citations).
 """
 
 from __future__ import annotations
@@ -11,7 +13,15 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Computed, ForeignKey, Index, UniqueConstraint, func
+from sqlalchemy import (
+    ARRAY,
+    Computed,
+    ForeignKey,
+    Index,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -66,7 +76,12 @@ class Chunk(Base):
     """A source-aware chunk of an artifact; the unit embedded into Qdrant."""
 
     __tablename__ = "chunks"
-    __table_args__ = (Index("ix_chunks_tenant", "tenant_id"),)
+    __table_args__ = (
+        Index("ix_chunks_tenant", "tenant_id"),
+        # The BM25 GIN index (created in migration 0003); declared here so
+        # autogenerate sees it and doesn't propose dropping it.
+        Index("ix_chunks_text_tsv", "text_tsv", postgresql_using="gin"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID]
@@ -89,3 +104,154 @@ class Chunk(Base):
     )
 
     artifact: Mapped[Artifact] = relationship(back_populates="chunks")
+
+
+# --- Knowledge graph (docs/DATA_MODEL.md §3) ---------------------------------
+
+
+class Entity(Base):
+    """A canonical entity in the tenant's knowledge graph."""
+
+    __tablename__ = "entities"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "type", "name", name="uq_entity_identity"),
+        Index("ix_entities_tenant", "tenant_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID]
+    type: Mapped[str]  # person | team | system | policy | product | customer | ...
+    name: Mapped[str]  # canonical name
+    aliases: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
+    attributes: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    mentions: Mapped[list[EntityMention]] = relationship(
+        back_populates="entity", cascade="all, delete-orphan"
+    )
+
+
+class EntityMention(Base):
+    """Provenance: an entity as observed in a specific chunk."""
+
+    __tablename__ = "entity_mentions"
+    __table_args__ = (Index("ix_entity_mentions_tenant", "tenant_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID]
+    entity_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("entities.id", ondelete="CASCADE"))
+    chunk_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("chunks.id", ondelete="CASCADE"))
+    confidence: Mapped[float] = mapped_column(default=1.0)
+
+    entity: Mapped[Entity] = relationship(back_populates="mentions")
+
+
+class Relation(Base):
+    """A subject->predicate->object edge with provenance and temporal validity."""
+
+    __tablename__ = "relations"
+    __table_args__ = (Index("ix_relations_tenant", "tenant_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID]
+    subject_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("entities.id", ondelete="CASCADE"))
+    predicate: Mapped[str]  # approves | owns | escalates_to | reports_to | ...
+    object_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("entities.id", ondelete="CASCADE"))
+    confidence: Mapped[float] = mapped_column(default=1.0)
+    source_chunk_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("chunks.id", ondelete="SET NULL"), nullable=True
+    )
+    valid_from: Mapped[datetime | None] = mapped_column(nullable=True)
+    valid_to: Mapped[datetime | None] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+# --- Process registry (docs/DATA_MODEL.md §5) --------------------------------
+
+
+class Process(Base):
+    """A recurring task: named, versioned, source-cited. The product's core unit."""
+
+    __tablename__ = "processes"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "name", name="uq_process_identity"),
+        Index("ix_processes_tenant", "tenant_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID]
+    name: Mapped[str]
+    trigger: Mapped[str]
+    current_version: Mapped[int] = mapped_column(default=1)
+    status: Mapped[str] = mapped_column(default="draft")  # draft|active|stale|deprecated
+    confidence: Mapped[float] = mapped_column(default=1.0)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    versions: Mapped[list[ProcessVersion]] = relationship(
+        back_populates="process", cascade="all, delete-orphan"
+    )
+
+
+class ProcessVersion(Base):
+    """An immutable version of a process; `body` is the canonical JSON served."""
+
+    __tablename__ = "process_versions"
+    __table_args__ = (
+        UniqueConstraint("process_id", "version", name="uq_process_version"),
+        Index("ix_process_versions_tenant", "tenant_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID]
+    process_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("processes.id", ondelete="CASCADE"))
+    version: Mapped[int]
+    body: Mapped[dict[str, Any]] = mapped_column(JSONB)  # canonical process JSON
+    created_by: Mapped[str] = mapped_column(default="extractor")  # extractor | reviewer
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    process: Mapped[Process] = relationship(back_populates="versions")
+    steps: Mapped[list[ProcessStep]] = relationship(
+        back_populates="process_version", cascade="all, delete-orphan"
+    )
+
+
+class ProcessStep(Base):
+    """One imperative step in a process version (queryable projection of `body`)."""
+
+    __tablename__ = "process_steps"
+    __table_args__ = (Index("ix_process_steps_tenant", "tenant_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID]
+    process_version_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("process_versions.id", ondelete="CASCADE")
+    )
+    ordinal: Mapped[int]
+    action: Mapped[str]
+    actor_entity_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("entities.id", ondelete="SET NULL"), nullable=True
+    )
+    decision: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+
+    process_version: Mapped[ProcessVersion] = relationship(back_populates="steps")
+    citations: Mapped[list[Citation]] = relationship(
+        back_populates="process_step", cascade="all, delete-orphan"
+    )
+
+
+class Citation(Base):
+    """A pointer from a process step (or other owner) back to its source chunk."""
+
+    __tablename__ = "citations"
+    __table_args__ = (Index("ix_citations_tenant", "tenant_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID]
+    owner_type: Mapped[str]  # process_step | answer | relation
+    process_step_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("process_steps.id", ondelete="CASCADE"), nullable=True
+    )
+    chunk_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("chunks.id", ondelete="CASCADE"))
+    quote: Mapped[str | None] = mapped_column(nullable=True)
+
+    process_step: Mapped[ProcessStep | None] = relationship(back_populates="citations")
