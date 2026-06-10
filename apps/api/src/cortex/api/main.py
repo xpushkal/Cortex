@@ -11,6 +11,7 @@ from fastapi import FastAPI
 
 from cortex.api.ask import router as ask_router
 from cortex.api.config import get_settings
+from cortex.api.ingest import router as ingest_router
 from cortex.api.processes import router as processes_router
 from cortex.api.search import router as search_router
 from cortex.obs import init_tracing
@@ -19,6 +20,7 @@ app = FastAPI(title="Cortex", version="0.0.0")
 app.include_router(search_router)
 app.include_router(processes_router)
 app.include_router(ask_router)
+app.include_router(ingest_router)
 
 # Auto-instrument HTTP spans when a collector endpoint is configured (no-op otherwise).
 if init_tracing("cortex-api"):

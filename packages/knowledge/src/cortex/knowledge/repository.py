@@ -25,6 +25,7 @@ from cortex.knowledge.freshness import (
     FRESH,
     PROCESS_TTL_SECONDS,
     STALE,
+    revalidate_process,
     set_freshness,
 )
 from cortex.knowledge.models import Process, RelationCandidate, ResolvedEntity
@@ -292,6 +293,34 @@ async def _write_version(
                     quote=cite.quote,
                 )
             )
+
+
+async def review_process(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    process_id: uuid.UUID,
+    action: str,
+) -> bool:
+    """Human review of a process (docs/API.md). approve -> active + fresh; reject
+    -> deprecated. Returns False if the process doesn't exist for the tenant."""
+    proc = (
+        await session.execute(
+            sa.select(ProcessRow).where(
+                ProcessRow.tenant_id == tenant_id, ProcessRow.id == process_id
+            )
+        )
+    ).scalar_one_or_none()
+    if proc is None:
+        return False
+    if action == "approve":
+        proc.status = "active"
+        await revalidate_process(session, tenant_id=tenant_id, process_id=process_id)
+    elif action == "reject":
+        proc.status = "deprecated"
+    else:
+        raise ValueError(f"unknown review action: {action!r}")
+    return True
 
 
 async def list_processes(

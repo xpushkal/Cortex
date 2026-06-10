@@ -20,9 +20,15 @@ from cortex.knowledge import (
     get_process_body,
     get_process_versions,
     list_processes,
+    review_process,
 )
 
 router = APIRouter()
+
+
+class ReviewRequest(BaseModel):
+    action: str  # approve | reject
+    reviewer: str | None = None
 
 
 class ProcessListResponse(BaseModel):
@@ -63,3 +69,21 @@ async def get_process_versions_endpoint(
     if not versions:
         raise HTTPException(status_code=404, detail="process not found")
     return {"versions": versions}
+
+
+@router.post("/v1/processes/{process_id}/review")
+async def review_process_endpoint(
+    process_id: uuid.UUID,
+    req: ReviewRequest,
+    tenant: Annotated[uuid.UUID, Depends(tenant_id)],
+    session: Annotated[AsyncSession, Depends(db_session)],
+) -> dict[str, Any]:
+    """Human review: `approve` promotes a draft to active + fresh; `reject`
+    deprecates it (docs/API.md). Closes the M3 staleness loop."""
+    if req.action not in ("approve", "reject"):
+        raise HTTPException(status_code=400, detail="action must be approve or reject")
+    ok = await review_process(session, tenant_id=tenant, process_id=process_id, action=req.action)
+    if not ok:
+        raise HTTPException(status_code=404, detail="process not found")
+    await session.commit()
+    return {"id": str(process_id), "action": req.action}
