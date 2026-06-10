@@ -25,6 +25,7 @@ from cortex.knowledge.freshness import (
     FRESH,
     PROCESS_TTL_SECONDS,
     STALE,
+    get_freshness_map,
     revalidate_process,
     set_freshness,
 )
@@ -44,6 +45,7 @@ class ProcessSummary(BaseModel):
     version: int
     status: str
     confidence: float
+    freshness: str = "fresh"  # fresh | stale | expired (M3)
 
 
 # --- graph --------------------------------------------------------------------
@@ -337,6 +339,9 @@ async def list_processes(
         stmt = stmt.where(ProcessRow.name.ilike(f"%{q}%"))
     stmt = stmt.order_by(ProcessRow.name)
     rows = (await session.execute(stmt)).scalars().all()
+    freshness = await get_freshness_map(
+        session, tenant_id=tenant_id, object_type="process", object_ids=[r.id for r in rows]
+    )
     return [
         ProcessSummary(
             id=str(r.id),
@@ -344,6 +349,7 @@ async def list_processes(
             version=r.current_version,
             status=r.status,
             confidence=r.confidence,
+            freshness=freshness.get(str(r.id), FRESH),
         )
         for r in rows
     ]
@@ -370,7 +376,15 @@ async def get_process_body(
             )
         )
     ).scalar_one()
-    return {**version.body, "id": str(proc.id), "status": proc.status}
+    freshness = await get_freshness_map(
+        session, tenant_id=tenant_id, object_type="process", object_ids=[proc.id]
+    )
+    return {
+        **version.body,
+        "id": str(proc.id),
+        "status": proc.status,
+        "freshness": freshness.get(str(proc.id), FRESH),
+    }
 
 
 _WORD = re.compile(r"[a-z0-9$]+")
@@ -410,7 +424,15 @@ async def match_process(
     if best is None:
         return None
     proc, version = best
-    return {**version.body, "id": str(proc.id), "status": proc.status}
+    freshness = await get_freshness_map(
+        session, tenant_id=tenant_id, object_type="process", object_ids=[proc.id]
+    )
+    return {
+        **version.body,
+        "id": str(proc.id),
+        "status": proc.status,
+        "freshness": freshness.get(str(proc.id), FRESH),
+    }
 
 
 async def get_process_versions(
