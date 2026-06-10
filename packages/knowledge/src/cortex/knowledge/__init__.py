@@ -10,6 +10,11 @@ from cortex.knowledge.extraction import (
     extract_processes,
     get_process_synth,
 )
+from cortex.knowledge.contradiction import (
+    ContradictionReport,
+    StepConflict,
+    detect_contradiction,
+)
 from cortex.knowledge.faithfulness import coverage, is_faithful
 from cortex.knowledge.freshness import (
     EXPIRED,
@@ -51,6 +56,7 @@ from cortex.knowledge.resolution import resolve_entities
 __all__ = [
     "ChunkRef",
     "Citation",
+    "ContradictionReport",
     "EXPIRED",
     "EntityCandidate",
     "Extractor",
@@ -66,7 +72,9 @@ __all__ = [
     "RelationCandidate",
     "ResolvedEntity",
     "STALE",
+    "StepConflict",
     "coverage",
+    "detect_contradiction",
     "extract_processes",
     "get_extractor",
     "get_freshness_map",
