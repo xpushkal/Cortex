@@ -27,11 +27,7 @@ async def _require_infra() -> AsyncIterator[None]:
     yield
 
 
-@pytest.fixture
-async def seeded_tenant() -> AsyncIterator[uuid.UUID]:
-    tenant_id = uuid.uuid4()
-    await ingest_source(SampleConnector(), tenant_id=tenant_id)
-    yield tenant_id
+async def _purge(tenant_id: uuid.UUID) -> None:
     async with get_sessionmaker()() as session:
         for model in (Freshness, Relation, EntityMention, Process, Entity):
             await session.execute(delete(model).where(model.tenant_id == tenant_id))
@@ -47,3 +43,19 @@ async def seeded_tenant() -> AsyncIterator[uuid.UUID]:
             ]
         ),
     )
+
+
+@pytest.fixture
+async def seeded_tenant() -> AsyncIterator[uuid.UUID]:
+    tenant_id = uuid.uuid4()
+    await ingest_source(SampleConnector(), tenant_id=tenant_id)
+    yield tenant_id
+    await _purge(tenant_id)
+
+
+@pytest.fixture
+async def fresh_tenant() -> AsyncIterator[uuid.UUID]:
+    """An empty tenant the test populates itself; purged afterwards."""
+    tenant_id = uuid.uuid4()
+    yield tenant_id
+    await _purge(tenant_id)
