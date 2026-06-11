@@ -122,8 +122,9 @@ scripted task with every action traceable to a cited process step.
 - Built a hybrid retrieval stack (BM25 + dense + cross-encoder rerank) hitting
   **Recall@10 0.95 / nDCG@10 0.91** (held-out golden set, M1 baseline stack),
   guarded by a blocking CI eval-regression gate.
-- Fine-tuned domain embeddings (contrastive + hard-negative mining) for **+[Z]%
-  Recall@10** over the off-the-shelf baseline.
+- Built a domain embedding fine-tune pipeline (synthetic queries + hard-negative
+  mining + contrastive BGE) with an A/B acceptance gate (ship only on ≥+0.05
+  Recall@10 / ≥+0.03 nDCG@10 vs base) and a flag-gated serving swap.
 - Designed multi-tenant infra: Postgres RLS + mandatory tenant filter (blocking
   cross-tenant leakage gate), per-tenant/per-source token-bucket rate limiting, and
   a sharded vector store, with a load-test harness + k8s/Terraform to hit the

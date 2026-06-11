@@ -8,6 +8,25 @@ derived from [Conventional Commits](https://www.conventionalcommits.org/) on
 
 ## [Unreleased]
 
+### Added — M5 (ML depth: embedding fine-tune)
+- Synthetic query generation (`finetune.py`): deterministic salient-keyword
+  template default, `claude-haiku-4-5` behind `CORTEX_QUERYGEN=llm`, both
+  **round-trip filtered** (a query is kept only if it retrieves its source
+  chunk).
+- Hard-negative mining over the base retriever + training-data assembly into
+  `MultipleNegativesRankingLoss` examples (JSONL); `prepare_training_data` runs
+  the full augment → mine → assemble pipeline.
+- A/B acceptance gate (`ab_compare`): ships only on **≥ 0.05 Recall@10 and
+  ≥ 0.03 nDCG@10** over base, with a SHIP / DO-NOT-SHIP report; in-memory
+  `evaluate_embedder` scores any embedder over the golden set without a DB.
+- `FineTunedEmbedder` + `get_embedder` `finetuned` branch — the fine-tuned model
+  **swapped into serving behind a flag** (`CORTEX_EMBEDDER=finetuned`,
+  `CORTEX_EMBEDDER_MODEL=<path>`).
+- `scripts/train_embeddings.py` (`just train-embeddings`): real mine → train →
+  eval → report orchestration that refuses to ship below the bar. The pipeline,
+  gate, and swap are CI-tested deterministically; the `.fit()` + headline deltas
+  need the `ml` extra + compute (documented, not CI-gated).
+
 ### Added — M4 (scale & infra)
 - **Postgres row-level security** (migration `0006`) on every tenant table with a
   fail-closed policy keyed to the `app.current_tenant` GUC, plus a non-superuser

@@ -1,6 +1,6 @@
 # M5 Plan — ML Depth (Embedding Fine-Tune)
 
-**Status:** Active
+**Status:** Complete (2026-06-11) — synthetic queries + round-trip filter, hard-negative mining, A/B acceptance gate (≥0.05 R@10 / ≥0.03 nDCG@10), and the fine-tuned embedder swapped into serving behind CORTEX_EMBEDDER=finetuned. Pipeline + gate + swap CI-tested; the training run + headline deltas reproduced via scripts/train_embeddings.py (ml extra), not CI-gated.
 **Branch:** `M5`
 **Roadmap gate (done-when):** fine-tuned embeddings beat base `bge-small` by
 **≥ 5% Recall@10 and ≥ 0.03 nDCG@10** on the held-out golden set, and the model

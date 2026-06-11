@@ -165,13 +165,15 @@ and quality gate are in [`docs/TEST-STRATEGY.md`](docs/TEST-STRATEGY.md).
 
 ## Status
 
-Pre-alpha. **M4 (scale & infra) complete**: defense-in-depth multi-tenancy —
-Postgres **row-level security** enforced for a least-privilege role plus the
-mandatory tenant filter, with a **cross-tenant leakage test as a blocking CI
-gate** — per-tenant ingress + per-source egress token-bucket rate limiting,
-Qdrant shard-by-tenant, a load-test harness, and k8s + Terraform infra. (The
-600 QPS / 2M-chunk throughput target is reproduced against a real deployment
-via the harness, not CI-gated.) M3 shipped the change-driven freshness loop;
-M2 the cited, versioned **process objects** (citation validity 1.00, blocking);
-M1 hybrid retrieval at Recall@10 0.95 / nDCG@10 0.91; M0 the dense-only slice.
-Build order and acceptance gates: [`docs/ROADMAP.md`](docs/ROADMAP.md).
+Pre-alpha. **M5 (ML depth) complete**: a domain embedding fine-tune pipeline —
+synthetic query generation (round-trip filtered), hard-negative mining,
+contrastive BGE fine-tune (`MultipleNegativesRankingLoss`), an A/B acceptance
+gate (ship only on ≥ 0.05 Recall@10 / ≥ 0.03 nDCG@10 vs base), and the fine-tuned
+model **swapped into serving behind a flag** (`CORTEX_EMBEDDER=finetuned`). The
+pipeline + gate + swap are CI-tested deterministically; the headline deltas are
+produced by running `scripts/train_embeddings.py` with the `ml` extra + compute
+(documented, not CI-gated). M4 shipped multi-tenant RLS + a blocking cross-tenant
+leakage gate, rate limiting, and k8s/Terraform; M3 the freshness loop; M2 the
+cited, versioned **process objects** (citation validity 1.00); M1 hybrid
+retrieval at Recall@10 0.95 / nDCG@10 0.91; M0 the dense-only slice. Build order
+and acceptance gates: [`docs/ROADMAP.md`](docs/ROADMAP.md).
