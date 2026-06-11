@@ -13,6 +13,7 @@ from cortex.connectors.base import (
     SourceConfig,
     TokenBucketSpec,
 )
+from cortex.connectors.github import GitHubConnector
 from cortex.connectors.sample import SAMPLE_CORPUS, SampleConnector
 
 __all__ = [
@@ -20,6 +21,7 @@ __all__ = [
     "Artifact",
     "Connector",
     "Cursor",
+    "GitHubConnector",
     "RawItem",
     "SampleConnector",
     "SourceConfig",
