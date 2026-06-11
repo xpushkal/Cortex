@@ -7,12 +7,18 @@ from cortex.retrieval.blurb import BlurbGenerator, TemplateBlurb, get_blurb_gene
 from cortex.retrieval.chunking import chunk
 from cortex.retrieval.embedding import DIM, Embedder, HashingEmbedder, get_embedder
 from cortex.retrieval.finetune import (
+    LabeledQuery,
     QueryGenerator,
     SyntheticQuery,
     TemplateQueryGenerator,
+    TrainingExample,
+    build_training_examples,
+    dump_training_examples,
     filter_round_trip,
     generate_synthetic_queries,
     get_query_generator,
+    load_training_examples,
+    mine_hard_negatives,
 )
 from cortex.retrieval.fusion import reciprocal_rank_fusion
 from cortex.retrieval.hybrid import SearchMode, hybrid_search
@@ -23,6 +29,7 @@ __all__ = [
     "BlurbGenerator",
     "Embedder",
     "HashingEmbedder",
+    "LabeledQuery",
     "PassthroughReranker",
     "QueryGenerator",
     "Reranker",
@@ -30,7 +37,10 @@ __all__ = [
     "SyntheticQuery",
     "TemplateBlurb",
     "TemplateQueryGenerator",
+    "TrainingExample",
+    "build_training_examples",
     "chunk",
+    "dump_training_examples",
     "filter_round_trip",
     "generate_synthetic_queries",
     "get_blurb_generator",
@@ -38,5 +48,7 @@ __all__ = [
     "get_query_generator",
     "get_reranker",
     "hybrid_search",
+    "load_training_examples",
+    "mine_hard_negatives",
     "reciprocal_rank_fusion",
 ]

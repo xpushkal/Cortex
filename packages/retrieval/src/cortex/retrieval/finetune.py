@@ -12,16 +12,57 @@ from __future__ import annotations
 
 import os
 import re
+from pathlib import Path
 from typing import Any, Protocol
 
 from pydantic import BaseModel
 
 from cortex.retrieval.embedding import Embedder
 
+# A (query, set of relevant chunk ids) training label.
+LabeledQuery = tuple[str, set[str]]
+
 _TOKEN = re.compile(r"[a-z0-9$]+")
 _STOPWORDS = frozenset(
-    "the a an of to and or for in on at by is are be it its this that with as from "
-    "into within then than must should can may will if any every all be can".split()
+    [
+        "the",
+        "a",
+        "an",
+        "of",
+        "to",
+        "and",
+        "or",
+        "for",
+        "in",
+        "on",
+        "at",
+        "by",
+        "is",
+        "are",
+        "be",
+        "it",
+        "its",
+        "this",
+        "that",
+        "with",
+        "as",
+        "from",
+        "into",
+        "within",
+        "then",
+        "than",
+        "must",
+        "should",
+        "can",
+        "may",
+        "will",
+        "if",
+        "any",
+        "every",
+        "all",
+        "be",
+        "can",
+    ]
 )
 _QUERYGEN_MODEL = "claude-haiku-4-5"
 
@@ -146,3 +187,66 @@ def filter_round_trip(
         if pair.chunk_id in _rank(qvec, corpus_ids, corpus_vecs)[:k]:
             kept.append(pair)
     return kept
+
+
+# --- hard-negative mining + training-data assembly ------------------------------
+
+
+class TrainingExample(BaseModel):
+    """One contrastive example for MultipleNegativesRankingLoss."""
+
+    query: str
+    positive: str  # relevant chunk text (the anchor's positive)
+    negatives: list[str] = []  # mined hard-negative chunk texts
+
+
+def mine_hard_negatives(
+    labeled: list[LabeledQuery],
+    corpus: dict[str, str],
+    embedder: Embedder,
+    *,
+    fetch_k: int = 20,
+    cap: int = 3,
+) -> list[list[str]]:
+    """Per labeled query, the highest-ranked non-relevant chunk ids (hard negatives).
+
+    Runs the base retriever over each query and keeps the top non-positive chunks,
+    capped — the chunks the model confuses with the answer (§2). Deterministic
+    over the `Embedder` interface; returned list is aligned with `labeled`.
+    """
+    corpus_ids = list(corpus)
+    corpus_vecs = embedder.embed([corpus[cid] for cid in corpus_ids])
+    query_vecs = embedder.embed([q for q, _ in labeled])
+    out: list[list[str]] = []
+    for (_, positives), qvec in zip(labeled, query_vecs, strict=True):
+        ranked = _rank(qvec, corpus_ids, corpus_vecs)[:fetch_k]
+        out.append([cid for cid in ranked if cid not in positives][:cap])
+    return out
+
+
+def build_training_examples(
+    labeled: list[LabeledQuery],
+    hard_negatives: list[list[str]],
+    corpus: dict[str, str],
+) -> list[TrainingExample]:
+    """Assemble (query, positive_text, [hard_negative_texts]) training examples."""
+    examples: list[TrainingExample] = []
+    for (query, positives), neg_ids in zip(labeled, hard_negatives, strict=True):
+        neg_texts = [corpus[n] for n in neg_ids if n in corpus]
+        for pid in sorted(positives):
+            if pid in corpus:
+                examples.append(
+                    TrainingExample(query=query, positive=corpus[pid], negatives=neg_texts)
+                )
+    return examples
+
+
+def dump_training_examples(examples: list[TrainingExample], path: Path) -> None:
+    """Write examples as JSONL (the shape train_embeddings.py reads)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(e.model_dump_json() for e in examples) + "\n", encoding="utf-8")
+
+
+def load_training_examples(path: Path) -> list[TrainingExample]:
+    text = path.read_text(encoding="utf-8")
+    return [TrainingExample.model_validate_json(line) for line in text.splitlines() if line.strip()]
