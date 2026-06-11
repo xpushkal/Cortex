@@ -53,6 +53,7 @@ from cortex.knowledge.repository import (
     save_process,
 )
 from cortex.knowledge.resolution import resolve_entities
+from cortex.knowledge.skills import build_skills_file
 
 __all__ = [
     "EXPIRED",
@@ -74,6 +75,7 @@ __all__ = [
     "RelationCandidate",
     "ResolvedEntity",
     "StepConflict",
+    "build_skills_file",
     "coverage",
     "detect_contradiction",
     "extract_processes",
