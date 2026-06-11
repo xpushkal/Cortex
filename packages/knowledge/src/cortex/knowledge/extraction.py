@@ -10,8 +10,8 @@ Two synthesizers behind one interface (the M0/M1 pattern):
   - HeuristicProcessSynth (default): split chunks into sentences, keep the
     procedural ones (action/modal cues), cite the source chunk. Faithful by
     construction (the step text is a span of the cited chunk). Runs in CI.
-  - LlmProcessSynth: `claude-opus-4-8` structured outputs (the `llm` extra),
-    injectable client; never runs in CI.
+  - LlmProcessSynth: synthesis via the pluggable gateway (cortex.obs.complete
+    — Anthropic or OpenRouter, CORTEX_LLM_PROVIDER); never runs in CI.
 
 Select via CORTEX_EXTRACTOR=heuristic|llm (default heuristic).
 """
@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections.abc import Callable
 from typing import Any, ClassVar, Protocol
 
 from cortex.knowledge.faithfulness import is_faithful
@@ -30,8 +31,10 @@ from cortex.knowledge.models import (
     ProcessCluster,
     ProcessStep,
 )
+from cortex.obs import complete as llm_complete
 
-_SYNTH_MODEL = "claude-opus-4-8"
+# A pluggable LLM completion callable (cortex.obs.complete), injectable for tests.
+Completer = Callable[..., str]
 
 # Verb/modal cues that mark a sentence as a procedural step (vs. a title or
 # definition). A general signal, not memorized sample text.
@@ -87,7 +90,7 @@ class HeuristicProcessSynth:
 
 
 class LlmProcessSynth:
-    """Process synthesis via claude-opus-4-8 structured outputs (the `llm` extra).
+    """Process synthesis via the pluggable LLM gateway (Anthropic | OpenRouter).
 
     The schema constrains each step to cite a `chunk_id`; the faithfulness gate
     downstream drops any step whose citation the cluster text doesn't support.
@@ -114,33 +117,24 @@ class LlmProcessSynth:
         "additionalProperties": False,
     }
 
-    def __init__(self, model: str = _SYNTH_MODEL, client: Any | None = None) -> None:
-        if client is None:
-            try:
-                import anthropic
-            except ImportError as exc:  # pragma: no cover - only without the extra
-                raise RuntimeError(
-                    "LlmProcessSynth needs the 'llm' extra: uv sync --extra llm"
-                ) from exc
-            client = anthropic.Anthropic()
-        self._client = client
+    def __init__(self, model: str | None = None, complete: Completer | None = None) -> None:
         self._model = model
+        self._complete = complete or llm_complete
 
     def synthesize(self, cluster: ProcessCluster) -> Process | None:
         catalog = "\n".join(f"[{c.chunk_id}] {c.text}" for c in cluster.chunks)
-        response = self._client.messages.create(
-            model=self._model,
-            max_tokens=2048,
-            thinking={"type": "adaptive"},
+        raw = self._complete(
             system=(
                 "Assemble the recurring task in these source chunks into ordered, "
                 "imperative steps. Every step MUST cite the chunk_id it is grounded "
                 "in. Only include steps stated in the sources."
             ),
-            output_config={"format": {"type": "json_schema", "schema": self._SCHEMA}},
-            messages=[{"role": "user", "content": f"Task: {cluster.name}\n\n{catalog}"}],
+            user=f"Task: {cluster.name}\n\n{catalog}",
+            model=self._model,
+            max_tokens=2048,
+            json_schema=self._SCHEMA,
         )
-        payload = json.loads(next(b.text for b in response.content if b.type == "text"))
+        payload = json.loads(raw)
         steps = [
             ProcessStep(
                 ordinal=i + 1,

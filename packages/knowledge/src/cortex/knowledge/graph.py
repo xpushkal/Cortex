@@ -7,8 +7,8 @@ confidence. Sub-threshold candidates are dropped by the caller.
 Two implementations behind one interface, the M0/M1 pattern:
   - HeuristicExtractor (default): a typed org-entity lexicon + relation-cue
     regexes. A genuine (if naive) NER-lite method — dependency-free, runs in CI.
-  - LlmExtractor: `claude-opus-4-8` with structured outputs (the `llm` extra),
-    injectable client; never runs in CI.
+  - LlmExtractor: LLM extraction via the pluggable gateway (cortex.obs.complete
+    — Anthropic or OpenRouter, CORTEX_LLM_PROVIDER); never runs in CI.
 
 Select via CORTEX_EXTRACTOR=heuristic|llm (default heuristic).
 """
@@ -18,11 +18,14 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections.abc import Callable
 from typing import Any, ClassVar, Protocol
 
 from cortex.knowledge.models import EntityCandidate, RelationCandidate
+from cortex.obs import complete as llm_complete
 
-_EXTRACT_MODEL = "claude-opus-4-8"
+# A pluggable LLM completion callable (cortex.obs.complete), injectable for tests.
+Completer = Callable[..., str]
 
 # Typed lexicon of common organizational entities. Longest phrases first so
 # "finance team" wins over "finance". Generalizes across companies (roles,
@@ -138,7 +141,7 @@ class HeuristicExtractor:
 
 
 class LlmExtractor:
-    """Entity/relation extraction via claude-opus-4-8 structured outputs (the `llm` extra)."""
+    """Entity/relation extraction via the pluggable LLM gateway (Anthropic | OpenRouter)."""
 
     _SCHEMA: ClassVar[dict[str, Any]] = {
         "type": "object",
@@ -173,34 +176,25 @@ class LlmExtractor:
         "additionalProperties": False,
     }
 
-    def __init__(self, model: str = _EXTRACT_MODEL, client: Any | None = None) -> None:
-        if client is None:
-            try:
-                import anthropic
-            except ImportError as exc:  # pragma: no cover - only without the extra
-                raise RuntimeError(
-                    "LlmExtractor needs the 'llm' extra: uv sync --extra llm"
-                ) from exc
-            client = anthropic.Anthropic()
-        self._client = client
+    def __init__(self, model: str | None = None, complete: Completer | None = None) -> None:
         self._model = model
+        self._complete = complete or llm_complete
 
     def extract(
         self, chunk_id: str, text: str
     ) -> tuple[list[EntityCandidate], list[RelationCandidate]]:
-        response = self._client.messages.create(
-            model=self._model,
-            max_tokens=1024,
-            thinking={"type": "adaptive"},
+        raw = self._complete(
             system=(
                 "Extract organizational entities (people, teams, roles, systems, "
                 "policies) and their relations (approves, requires_approval_from, "
                 "escalates_to, owns, reports_to) from the text. Only what is stated."
             ),
-            output_config={"format": {"type": "json_schema", "schema": self._SCHEMA}},
-            messages=[{"role": "user", "content": text}],
+            user=text,
+            model=self._model,
+            max_tokens=1024,
+            json_schema=self._SCHEMA,
         )
-        payload = json.loads(next(b.text for b in response.content if b.type == "text"))
+        payload = json.loads(raw)
         entities = [
             EntityCandidate(
                 name=e["name"], type=e["type"], source_chunk_id=chunk_id, confidence=0.9
