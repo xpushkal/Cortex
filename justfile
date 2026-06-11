@@ -30,6 +30,10 @@ migrate:
 seed:
     uv run python -m cortex.workers.ingest --source sample --tenant demo
 
+# Expire knowledge past its TTL (M3 freshness sweep; run on a schedule).
+sweep:
+    uv run python -m cortex.workers.freshness_sweep
+
 # Run the API with autoreload.
 dev:
     uv run uvicorn cortex.api.main:app --reload --port 8000

@@ -20,6 +20,15 @@ import sqlalchemy as sa
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from cortex.knowledge.contradiction import detect_contradiction
+from cortex.knowledge.freshness import (
+    FRESH,
+    PROCESS_TTL_SECONDS,
+    STALE,
+    get_freshness_map,
+    revalidate_process,
+    set_freshness,
+)
 from cortex.knowledge.models import Process, RelationCandidate, ResolvedEntity
 from cortex.storage.models import Citation as CitationRow
 from cortex.storage.models import Entity as EntityRow
@@ -36,6 +45,7 @@ class ProcessSummary(BaseModel):
     version: int
     status: str
     confidence: float
+    freshness: str = "fresh"  # fresh | stale | expired (M3)
 
 
 # --- graph --------------------------------------------------------------------
@@ -158,9 +168,11 @@ async def save_process(
 ) -> uuid.UUID:
     """Persist a process version-aware. Identical body to the latest = no-op.
 
-    A new process is created `active` at version 1. A changed body on an
-    existing process appends a new version (status `draft`, current_version
-    bumped) rather than mutating — the no-silent-overwrite guarantee (D6).
+    A new process is created `active` + `fresh` at version 1. A changed body on
+    an existing process appends a new version (status `draft`) rather than
+    mutating (D6), runs contradiction detection (M3), records the diff on the
+    new version when it conflicts, and marks the process `stale` — never served
+    as current until reviewed.
     """
     actor_resolver = actor_resolver or {}
     body = process.model_dump()
@@ -192,6 +204,14 @@ async def save_process(
             process=process,
             actor_resolver=actor_resolver,
         )
+        await set_freshness(
+            session,
+            tenant_id=tenant_id,
+            object_type="process",
+            object_id=proc.id,
+            state=FRESH,
+            ttl_seconds=PROCESS_TTL_SECONDS,
+        )
         return proc.id
 
     latest = (
@@ -205,9 +225,12 @@ async def save_process(
     if _same_body(latest.body, body):
         return proc.id  # idempotent: unchanged extraction, no version churn
 
+    report = detect_contradiction(latest.body, body)
+    if report.contradictory:
+        body = {**body, "review": {"needs_review": True, "reason": report.summary}}
     new_version = latest.version + 1
     proc.current_version = new_version
-    proc.status = "draft"  # a changed process needs review before going active (M3)
+    proc.status = "draft"  # a changed process needs review before going active
     proc.trigger = process.trigger
     await _write_version(
         session,
@@ -217,6 +240,14 @@ async def save_process(
         body=body,
         process=process,
         actor_resolver=actor_resolver,
+    )
+    await set_freshness(
+        session,
+        tenant_id=tenant_id,
+        object_type="process",
+        object_id=proc.id,
+        state=STALE,
+        reason=f"contradiction: {report.summary}" if report.contradictory else "source changed",
     )
     return proc.id
 
@@ -266,6 +297,34 @@ async def _write_version(
             )
 
 
+async def review_process(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    process_id: uuid.UUID,
+    action: str,
+) -> bool:
+    """Human review of a process (docs/API.md). approve -> active + fresh; reject
+    -> deprecated. Returns False if the process doesn't exist for the tenant."""
+    proc = (
+        await session.execute(
+            sa.select(ProcessRow).where(
+                ProcessRow.tenant_id == tenant_id, ProcessRow.id == process_id
+            )
+        )
+    ).scalar_one_or_none()
+    if proc is None:
+        return False
+    if action == "approve":
+        proc.status = "active"
+        await revalidate_process(session, tenant_id=tenant_id, process_id=process_id)
+    elif action == "reject":
+        proc.status = "deprecated"
+    else:
+        raise ValueError(f"unknown review action: {action!r}")
+    return True
+
+
 async def list_processes(
     session: AsyncSession,
     *,
@@ -280,6 +339,9 @@ async def list_processes(
         stmt = stmt.where(ProcessRow.name.ilike(f"%{q}%"))
     stmt = stmt.order_by(ProcessRow.name)
     rows = (await session.execute(stmt)).scalars().all()
+    freshness = await get_freshness_map(
+        session, tenant_id=tenant_id, object_type="process", object_ids=[r.id for r in rows]
+    )
     return [
         ProcessSummary(
             id=str(r.id),
@@ -287,6 +349,7 @@ async def list_processes(
             version=r.current_version,
             status=r.status,
             confidence=r.confidence,
+            freshness=freshness.get(str(r.id), FRESH),
         )
         for r in rows
     ]
@@ -313,7 +376,15 @@ async def get_process_body(
             )
         )
     ).scalar_one()
-    return {**version.body, "id": str(proc.id), "status": proc.status}
+    freshness = await get_freshness_map(
+        session, tenant_id=tenant_id, object_type="process", object_ids=[proc.id]
+    )
+    return {
+        **version.body,
+        "id": str(proc.id),
+        "status": proc.status,
+        "freshness": freshness.get(str(proc.id), FRESH),
+    }
 
 
 _WORD = re.compile(r"[a-z0-9$]+")
@@ -353,7 +424,15 @@ async def match_process(
     if best is None:
         return None
     proc, version = best
-    return {**version.body, "id": str(proc.id), "status": proc.status}
+    freshness = await get_freshness_map(
+        session, tenant_id=tenant_id, object_type="process", object_ids=[proc.id]
+    )
+    return {
+        **version.body,
+        "id": str(proc.id),
+        "status": proc.status,
+        "freshness": freshness.get(str(proc.id), FRESH),
+    }
 
 
 async def get_process_versions(

@@ -17,6 +17,7 @@ dependencies = [
     "cortex-storage",
     "cortex-retrieval",
     "cortex-knowledge",
+    "cortex-workers",
     "cortex-obs",
 ]
 
@@ -24,6 +25,7 @@ dependencies = [
 cortex-storage = { workspace = true }
 cortex-retrieval = { workspace = true }
 cortex-knowledge = { workspace = true }
+cortex-workers = { workspace = true }
 cortex-obs = { workspace = true }
 
 [build-system]

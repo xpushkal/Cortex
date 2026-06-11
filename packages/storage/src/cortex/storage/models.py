@@ -255,3 +255,31 @@ class Citation(Base):
     quote: Mapped[str | None] = mapped_column(nullable=True)
 
     process_step: Mapped[ProcessStep | None] = relationship(back_populates="citations")
+
+
+# --- Freshness (docs/DATA_MODEL.md §2; the M3 freshness loop) -----------------
+
+
+class Freshness(Base):
+    """Freshness state per tracked object — the source of truth for serving.
+
+    Orthogonal to `process.status` (which is lifecycle): this row says whether an
+    object is `fresh`, `stale` (a source it depends on changed), or `expired`
+    (past its TTL). M3 tracks processes; the schema is generic for chunk/entity.
+    """
+
+    __tablename__ = "freshness"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "object_type", "object_id", name="uq_freshness_object"),
+        Index("ix_freshness_tenant", "tenant_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID]
+    object_type: Mapped[str]  # process | chunk | entity
+    object_id: Mapped[uuid.UUID]
+    state: Mapped[str] = mapped_column(default="fresh")  # fresh | stale | expired
+    reason: Mapped[str | None] = mapped_column(default=None)
+    last_validated_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    ttl_seconds: Mapped[int | None] = mapped_column(default=None)
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())

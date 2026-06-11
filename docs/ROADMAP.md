@@ -116,8 +116,9 @@ scripted task with every action traceable to a cited process step.
   M2 ships the structuring layer: a provenance-tracked entity/relation graph and
   versioned, faithfulness-gated process objects with **100% valid step citations**
   (blocking CI gate), served via /processes and grounded /ask.
-- Engineered async, idempotent, rate-limited ingestion sustaining **[N] docs/min/worker**
-  across [k] source connectors with a change-driven freshness loop.
+- Engineered async, idempotent ingestion with a **change-driven freshness loop**:
+  source changes re-version dependent process objects, mark them stale, and a TTL
+  sweep expires aging knowledge — so no stale data is ever served unlabeled.
 - Built a hybrid retrieval stack (BM25 + dense + cross-encoder rerank) hitting
   **Recall@10 0.95 / nDCG@10 0.91** (held-out golden set, M1 baseline stack),
   guarded by a blocking CI eval-regression gate.

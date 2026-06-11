@@ -15,14 +15,30 @@ import argparse
 import asyncio
 import hashlib
 import uuid
+from collections.abc import Iterator
+from datetime import UTC, datetime
 
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cortex.connectors import SampleConnector
-from cortex.connectors.base import Connector, SourceConfig
-from cortex.knowledge import ChunkRef, Extractor, get_extractor
+from cortex.connectors.base import (
+    Artifact as RawArtifact,
+)
+from cortex.connectors.base import (
+    Connector,
+    Cursor,
+    RawItem,
+    SourceConfig,
+    TokenBucketSpec,
+)
+from cortex.knowledge import (
+    ChunkRef,
+    Extractor,
+    get_extractor,
+    mark_processes_stale_for_artifact,
+)
 from cortex.obs import get_tracer, init_tracing
 from cortex.retrieval import chunk, get_blurb_generator, get_embedder
 from cortex.retrieval.blurb import ArtifactContext, artifact_head
@@ -120,7 +136,15 @@ async def ingest_source(
                 continue
 
             if existing is not None:
-                # Content changed: drop stale chunks (Postgres cascade + Qdrant points).
+                # Content changed (M3): mark processes that cite this artifact stale
+                # BEFORE dropping its chunks (citations cascade with the chunks).
+                await mark_processes_stale_for_artifact(
+                    session,
+                    tenant_id=tenant_id,
+                    artifact_id=existing.id,
+                    reason=f"source artifact {art.external_id} changed",
+                )
+                # Drop stale chunks (Postgres cascade + Qdrant points).
                 await delete_artifact_points(qclient, tenant_id=tenant_id, artifact_id=existing.id)
                 await session.delete(existing)
                 await session.flush()
@@ -204,6 +228,57 @@ async def ingest_source(
     span.set_attribute("cortex.skipped", stats.skipped)
     span.end()
     return stats
+
+
+class _EventConnector:
+    """A one-artifact connector built from an incremental-sync event (M3)."""
+
+    rate_limit = TokenBucketSpec(capacity=100, refill_per_second=100.0)
+
+    def __init__(self, *, source_kind: str, external_id: str, kind: str, content: str) -> None:
+        self.kind = source_kind
+        self._external_id = external_id
+        self._artifact_kind = kind
+        self._content = content
+
+    def backfill(self, cfg: SourceConfig) -> Iterator[RawItem]:
+        yield RawItem(
+            external_id=self._external_id,
+            payload={"kind": self._artifact_kind, "content": self._content},
+        )
+
+    def poll(self, cfg: SourceConfig, cursor: Cursor) -> tuple[Iterator[RawItem], Cursor]:
+        return iter(()), cursor
+
+    def normalize(self, raw: RawItem) -> RawArtifact:
+        return RawArtifact(
+            source_kind=self.kind,
+            external_id=raw.external_id,
+            kind=str(raw.payload["kind"]),
+            content=str(raw.payload["content"]),
+            created_at=datetime.now(tz=UTC),
+        )
+
+
+async def ingest_event(
+    *,
+    tenant_id: uuid.UUID,
+    source_kind: str,
+    external_id: str,
+    kind: str,
+    content: str,
+    dsn: str | None = None,
+    qdrant_url: str | None = None,
+) -> IngestStats:
+    """Incremental-sync entry point: ingest one changed artifact (the webhook path).
+
+    Idempotent and change-driven — unchanged content is a no-op; changed content
+    re-runs the per-artifact pipeline and marks dependent processes stale.
+    """
+    connector = _EventConnector(
+        source_kind=source_kind, external_id=external_id, kind=kind, content=content
+    )
+    return await ingest_source(connector, tenant_id=tenant_id, dsn=dsn, qdrant_url=qdrant_url)
 
 
 async def _amain(source: str, tenant: str) -> None:

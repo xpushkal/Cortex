@@ -23,7 +23,7 @@ from cortex.storage import (
     get_qdrant,
     get_sessionmaker,
 )
-from cortex.storage.models import Entity, EntityMention, Process, Relation
+from cortex.storage.models import Entity, EntityMention, Freshness, Process, Relation
 from cortex.workers.ingest import ingest_source
 
 # A token no document in the sample corpus contains — used to prove tenant B's
@@ -70,7 +70,7 @@ async def _require_infra() -> AsyncIterator[None]:
 async def _cleanup(tenant_id: uuid.UUID) -> None:
     async with get_sessionmaker()() as session:
         # M2 graph/process rows aren't under the sources cascade — purge them too.
-        for model in (Relation, EntityMention, Process, Entity):
+        for model in (Freshness, Relation, EntityMention, Process, Entity):
             await session.execute(delete(model).where(model.tenant_id == tenant_id))
         await session.execute(delete(Source).where(Source.tenant_id == tenant_id))
         await session.commit()

@@ -97,6 +97,9 @@ async def ask(
             source_kinds=req.source_kinds,
         )
         process = await match_process(session, tenant_id=tenant, query=req.q)
+        # An expired process is never served as current — fall back to chunks (D6).
+        if process is not None and process.get("freshness") == "expired":
+            process = None
         span.set_attribute("cortex.grounded_in_process", process is not None)
 
     if process is not None:
@@ -108,6 +111,8 @@ async def ask(
             for c in s["citations"]
         ]
         used = [f"process:{process['id']}@v{process['version']}"]
+        # Labeled, never hidden: a stale grounding process surfaces as stale.
+        state = process.get("freshness", "fresh")
     else:
         context = [h.text for h in hits]
         citations = [
@@ -120,10 +125,11 @@ async def ask(
             for h in hits
         ]
         used = []
+        state = "fresh"  # re-ingest keeps chunks current; chunk-TTL labeling is future
 
     return AskResponse(
         answer=_compose(req.q, context),
         citations=citations,
-        freshness={"state": "fresh"},  # the real freshness loop is M3
+        freshness={"state": state},
         used_processes=used,
     )
