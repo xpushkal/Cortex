@@ -38,6 +38,10 @@ sweep:
 loadtest *ARGS:
     uv run python scripts/load_test.py {{ARGS}}
 
+# Fine-tune domain embeddings (M5; needs the `ml` extra: uv sync --extra ml).
+train-embeddings *ARGS:
+    uv run python scripts/train_embeddings.py {{ARGS}}
+
 # Run the API with autoreload.
 dev:
     uv run uvicorn cortex.api.main:app --reload --port 8000

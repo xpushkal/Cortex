@@ -11,6 +11,7 @@ from cortex.eval.ab import (
     ab_compare,
     emit_ab_report,
 )
+from cortex.eval.embedding_eval import evaluate_embedder
 from cortex.eval.gate import THRESHOLDS, GateMode, GateResult, evaluate_gate
 from cortex.eval.harness import (
     EvalReport,
@@ -46,6 +47,7 @@ __all__ = [
     "citation_validity",
     "emit_ab_report",
     "emit_report",
+    "evaluate_embedder",
     "evaluate_gate",
     "load_golden",
     "load_process_golden",

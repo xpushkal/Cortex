@@ -250,3 +250,29 @@ def dump_training_examples(examples: list[TrainingExample], path: Path) -> None:
 def load_training_examples(path: Path) -> list[TrainingExample]:
     text = path.read_text(encoding="utf-8")
     return [TrainingExample.model_validate_json(line) for line in text.splitlines() if line.strip()]
+
+
+def prepare_training_data(
+    corpus: dict[str, str],
+    labeled: list[LabeledQuery],
+    embedder: Embedder,
+    *,
+    generator: QueryGenerator | None = None,
+    augment: bool = True,
+    round_trip_k: int = 10,
+    fetch_k: int = 20,
+    cap: int = 3,
+) -> list[TrainingExample]:
+    """The full fine-tune data pipeline: augment → mine → assemble.
+
+    Golden `labeled` pairs are augmented with round-trip-filtered synthetic
+    queries, hard negatives are mined over the base embedder, and the result is
+    assembled into contrastive examples. Pure over the `Embedder` interface.
+    """
+    full = list(labeled)
+    if augment:
+        synthetic = generate_synthetic_queries(list(corpus.items()), generator=generator)
+        for pair in filter_round_trip(synthetic, corpus, embedder, k=round_trip_k):
+            full.append((pair.query, {pair.chunk_id}))
+    negatives = mine_hard_negatives(full, corpus, embedder, fetch_k=fetch_k, cap=cap)
+    return build_training_examples(full, negatives, corpus)

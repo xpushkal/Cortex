@@ -7,6 +7,7 @@ from cortex.retrieval.blurb import BlurbGenerator, TemplateBlurb, get_blurb_gene
 from cortex.retrieval.chunking import chunk
 from cortex.retrieval.embedding import (
     DIM,
+    BGEEmbedder,
     Embedder,
     FineTunedEmbedder,
     HashingEmbedder,
@@ -25,6 +26,7 @@ from cortex.retrieval.finetune import (
     get_query_generator,
     load_training_examples,
     mine_hard_negatives,
+    prepare_training_data,
 )
 from cortex.retrieval.fusion import reciprocal_rank_fusion
 from cortex.retrieval.hybrid import SearchMode, hybrid_search
@@ -32,6 +34,7 @@ from cortex.retrieval.rerank import PassthroughReranker, Reranker, get_reranker
 
 __all__ = [
     "DIM",
+    "BGEEmbedder",
     "BlurbGenerator",
     "Embedder",
     "FineTunedEmbedder",
@@ -57,5 +60,6 @@ __all__ = [
     "hybrid_search",
     "load_training_examples",
     "mine_hard_negatives",
+    "prepare_training_data",
     "reciprocal_rank_fusion",
 ]
