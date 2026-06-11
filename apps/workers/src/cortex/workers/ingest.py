@@ -18,12 +18,13 @@ import os
 import uuid
 from collections.abc import Iterator
 from datetime import UTC, datetime
+from pathlib import Path
 
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from cortex.connectors import SampleConnector
+from cortex.connectors import GitHubConnector, SampleConnector
 from cortex.connectors.base import (
     Artifact as RawArtifact,
 )
@@ -60,7 +61,6 @@ from cortex.storage import (
 )
 from cortex.workers.enrich import enrich_artifact
 
-CONNECTORS: dict[str, type[Connector]] = {"sample": SampleConnector}
 _tracer = get_tracer(__name__)
 
 
@@ -296,21 +296,44 @@ async def ingest_event(
     return await ingest_source(connector, tenant_id=tenant_id, dsn=dsn, qdrant_url=qdrant_url)
 
 
-async def _amain(source: str, tenant: str) -> None:
-    if source not in CONNECTORS:
-        raise SystemExit(f"unknown source {source!r}; known: {sorted(CONNECTORS)}")
+def _load_dotenv(path: str = ".env") -> None:
+    """Load .env into os.environ (existing vars win) so GITHUB_TOKEN etc. resolve."""
+    env = Path(path)
+    if not env.exists():
+        return
+    for line in env.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+def _build_connector(source: str, *, repo: str | None) -> Connector:
+    if source == "sample":
+        return SampleConnector()
+    if source == "github":
+        if not repo:
+            raise SystemExit("github needs --repo owner/name")
+        return GitHubConnector(repo=repo)
+    raise SystemExit(f"unknown source {source!r}; known: sample, github")
+
+
+async def _amain(source: str, tenant: str, *, repo: str | None) -> None:
     init_tracing("cortex-workers")
     tenant_id = resolve_tenant(tenant)
-    stats = await ingest_source(CONNECTORS[source](), tenant_id=tenant_id)
+    stats = await ingest_source(_build_connector(source, repo=repo), tenant_id=tenant_id)
     print(f"ingested tenant={tenant} ({tenant_id}): {stats.model_dump()}")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Ingest a source into Cortex (M0).")
-    parser.add_argument("--source", default="sample")
+    parser = argparse.ArgumentParser(description="Ingest a source into Cortex.")
+    parser.add_argument("--source", default="sample", help="sample | github")
     parser.add_argument("--tenant", required=True, help="tenant UUID or name")
+    parser.add_argument("--repo", help="owner/name (required for --source github)")
     args = parser.parse_args()
-    asyncio.run(_amain(args.source, args.tenant))
+    _load_dotenv()
+    asyncio.run(_amain(args.source, args.tenant, repo=args.repo))
 
 
 if __name__ == "__main__":
