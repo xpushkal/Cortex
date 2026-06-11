@@ -1,0 +1,100 @@
+"""Pluggable LLM gateway — Anthropic SDK or any OpenAI-compatible API (OpenRouter).
+
+The LLM-gated paths (entity/relation extraction, process synthesis, blurbs,
+`/ask` prose, ...) call `complete()` so the provider is a **config flip, not a
+code change**:
+
+    CORTEX_LLM_PROVIDER=anthropic   # default; needs ANTHROPIC_API_KEY (+ the `llm` extra)
+    CORTEX_LLM_PROVIDER=openrouter  # needs OPENROUTER_API_KEY; model via OPENROUTER_MODEL
+
+OpenRouter is OpenAI-compatible, so its path is plain HTTP (httpx) — no extra SDK
+install — and can serve Claude, GPT, Gemini, etc. behind one key.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+from typing import Any
+
+ANTHROPIC_DEFAULT_MODEL = "claude-opus-4-8"
+OPENROUTER_DEFAULT_MODEL = "anthropic/claude-3.5-sonnet"
+_OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+
+def complete(
+    *,
+    system: str,
+    user: str,
+    model: str | None = None,
+    max_tokens: int = 1024,
+    json_schema: dict[str, Any] | None = None,
+) -> str:
+    """Return the model's text for a (system, user) prompt via the configured provider.
+
+    When `json_schema` is given the model is constrained/instructed to emit JSON
+    matching it (provider-specific: Anthropic structured outputs vs OpenAI
+    response_format) — the caller still `json.loads` the result.
+    """
+    provider = os.environ.get("CORTEX_LLM_PROVIDER", "anthropic").lower()
+    if provider == "anthropic":
+        return _anthropic(system, user, model, max_tokens, json_schema)
+    if provider == "openrouter":
+        return _openrouter(system, user, model, max_tokens, json_schema)
+    raise ValueError(f"unknown CORTEX_LLM_PROVIDER: {provider!r} (anthropic|openrouter)")
+
+
+def _anthropic(
+    system: str, user: str, model: str | None, max_tokens: int, json_schema: dict[str, Any] | None
+) -> str:
+    try:
+        import anthropic
+    except ImportError as exc:  # pragma: no cover - only without the extra
+        raise RuntimeError(
+            "CORTEX_LLM_PROVIDER=anthropic needs the anthropic SDK: uv sync --extra llm"
+        ) from exc
+    kwargs: dict[str, Any] = {
+        "model": model or ANTHROPIC_DEFAULT_MODEL,
+        "max_tokens": max_tokens,
+        "thinking": {"type": "adaptive"},
+        "system": system,
+        "messages": [{"role": "user", "content": user}],
+    }
+    if json_schema is not None:
+        kwargs["output_config"] = {"format": {"type": "json_schema", "schema": json_schema}}
+    response = anthropic.Anthropic().messages.create(**kwargs)
+    text: str = next(b.text for b in response.content if b.type == "text")
+    return text
+
+
+def _openrouter(
+    system: str, user: str, model: str | None, max_tokens: int, json_schema: dict[str, Any] | None
+) -> str:
+    import httpx
+
+    key = os.environ.get("OPENROUTER_API_KEY")
+    if not key:
+        raise RuntimeError("CORTEX_LLM_PROVIDER=openrouter needs OPENROUTER_API_KEY")
+    if json_schema is not None:
+        system = (
+            f"{system}\n\nRespond ONLY with JSON matching this schema:\n{json.dumps(json_schema)}"
+        )
+    body: dict[str, Any] = {
+        "model": model or os.environ.get("OPENROUTER_MODEL", OPENROUTER_DEFAULT_MODEL),
+        "max_tokens": max_tokens,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+    }
+    if json_schema is not None:
+        body["response_format"] = {"type": "json_object"}
+    response = httpx.post(
+        _OPENROUTER_URL,
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        json=body,
+        timeout=120.0,
+    )
+    response.raise_for_status()
+    content: str = response.json()["choices"][0]["message"]["content"]
+    return content

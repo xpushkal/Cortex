@@ -43,46 +43,27 @@ def test_heuristic_no_entities_in_unrelated_text() -> None:
     assert relations == []
 
 
-# --- LLM path with an injected fake client (no anthropic dependency) -----------
+# --- LLM path with an injected `complete` (no provider/SDK dependency) ----------
 
 
-class _Block:
-    type = "text"
+def test_llm_extractor_parses_structured_output() -> None:
+    calls: list[dict] = []
 
-    def __init__(self, text: str) -> None:
-        self.text = text
-
-
-class _Response:
-    def __init__(self, text: str) -> None:
-        self.content = [_Block(text)]
-
-
-class _FakeMessages:
-    def __init__(self) -> None:
-        self.calls: list[dict] = []
-
-    def create(self, **kwargs: object) -> _Response:
-        self.calls.append(kwargs)
-        return _Response(
+    def fake_complete(**kwargs: object) -> str:
+        calls.append(kwargs)
+        return (
             '{"entities": [{"name": "finance team", "type": "team"}], '
             '"relations": [{"subject": "support agent", "predicate": '
             '"requires_approval_from", "object": "finance team"}]}'
         )
 
-
-class _FakeClient:
-    def __init__(self) -> None:
-        self.messages = _FakeMessages()
-
-
-def test_llm_extractor_parses_structured_output() -> None:
-    client = _FakeClient()
-    entities, relations = LlmExtractor(client=client).extract("chunk-9", REFUND)
+    entities, relations = LlmExtractor(complete=fake_complete).extract("chunk-9", REFUND)
     assert entities[0].name == "finance team"
     assert entities[0].source_chunk_id == "chunk-9"
     assert relations[0].predicate == "requires_approval_from"
-    assert client.messages.calls[0]["model"] == "claude-opus-4-8"
+    # The chunk text + schema were passed to the gateway.
+    assert REFUND in calls[0]["user"]
+    assert calls[0]["json_schema"]["required"] == ["entities", "relations"]
 
 
 def test_factory_defaults_to_heuristic(monkeypatch: pytest.MonkeyPatch) -> None:
