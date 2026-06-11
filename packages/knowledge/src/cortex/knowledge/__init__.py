@@ -53,19 +53,19 @@ from cortex.knowledge.repository import (
     save_process,
 )
 from cortex.knowledge.resolution import resolve_entities
+from cortex.knowledge.skills import build_skills_file
 
 __all__ = [
-    "EXPIRED",
-    "FRESH",
-    "PROCESS_TTL_SECONDS",
-    "STALE",
     "ChunkRef",
     "Citation",
     "ContradictionReport",
+    "EXPIRED",
     "EntityCandidate",
     "Extractor",
+    "FRESH",
     "HeuristicExtractor",
     "HeuristicProcessSynth",
+    "PROCESS_TTL_SECONDS",
     "Process",
     "ProcessCluster",
     "ProcessStep",
@@ -73,7 +73,9 @@ __all__ = [
     "ProcessSynth",
     "RelationCandidate",
     "ResolvedEntity",
+    "STALE",
     "StepConflict",
+    "build_skills_file",
     "coverage",
     "detect_contradiction",
     "extract_processes",
