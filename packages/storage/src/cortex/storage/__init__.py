@@ -5,7 +5,7 @@ graph + process registry), and the Qdrant vector-store client. See
 docs/DATA_MODEL.md and docs/ARCHITECTURE.md §4.
 """
 
-from cortex.storage.db import get_engine, get_sessionmaker
+from cortex.storage.db import APP_ROLE, app_role_dsn, get_engine, get_sessionmaker, set_tenant
 from cortex.storage.fts import search_bm25
 from cortex.storage.models import Artifact, Base, Chunk, Source
 from cortex.storage.qdrant import (
@@ -21,6 +21,7 @@ from cortex.storage.qdrant import (
 from cortex.storage.tenancy import resolve_tenant
 
 __all__ = [
+    "APP_ROLE",
     "CHUNKS_COLLECTION",
     "Artifact",
     "Base",
@@ -28,6 +29,7 @@ __all__ = [
     "ChunkVector",
     "SearchHit",
     "Source",
+    "app_role_dsn",
     "delete_artifact_points",
     "ensure_collection",
     "get_engine",
@@ -36,5 +38,6 @@ __all__ = [
     "resolve_tenant",
     "search",
     "search_bm25",
+    "set_tenant",
     "upsert_chunks",
 ]
