@@ -1,0 +1,66 @@
+# Stateless API Deployment + Service + HPA (docs/ARCHITECTURE.md §8).
+# Autoscaled on CPU; pods are stateless so scaling is horizontal and safe.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cortex-api
+  namespace: cortex
+  labels: { app: cortex-api }
+spec:
+  replicas: 3
+  selector:
+    matchLabels: { app: cortex-api }
+  template:
+    metadata:
+      labels: { app: cortex-api }
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/xpushkal/cortex-api:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef: { name: cortex-config }
+            - secretRef: { name: cortex-secrets }
+          readinessProbe:
+            httpGet: { path: /readyz, port: 8000 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8000 }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests: { cpu: "500m", memory: "512Mi" }
+            limits: { cpu: "2", memory: "2Gi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cortex-api
+  namespace: cortex
+spec:
+  selector: { app: cortex-api }
+  ports:
+    - port: 80
+      targetPort: 8000
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cortex-api
+  namespace: cortex
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cortex-api
+  minReplicas: 3
+  maxReplicas: 30
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 65
