@@ -112,8 +112,10 @@ scripted task with every action traceable to a cited process step.
 
 - Built **Cortex**, a YC S26-RFS "Company Brain": a multi-source knowledge system
   that ingests Slack/email/docs/code/tickets and structures them into versioned,
-  citeable, agent-executable process objects.
-  M2 ships the structuring layer: a provenance-tracked entity/relation graph and
+  citeable, agent-executable process objects — exported as an agent-consumable
+  **skills file** (`/skills`) that a reference agent uses to complete a scripted
+  task (route a $750 refund) **grounded entirely in cited process steps**.
+  The structuring layer is a provenance-tracked entity/relation graph and
   versioned, faithfulness-gated process objects with **100% valid step citations**
   (blocking CI gate), served via /processes and grounded /ask.
 - Engineered async, idempotent ingestion with a **change-driven freshness loop**:

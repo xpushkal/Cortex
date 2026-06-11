@@ -8,6 +8,23 @@ derived from [Conventional Commits](https://www.conventionalcommits.org/) on
 
 ## [Unreleased]
 
+### Added — M6 (skills export + agent demo)
+- New `cortex-agent` package (pydantic only — the external consumer's wire
+  contract): the `SkillsFile` schema + a `ReferenceAgent` that, given only the
+  skills file, completes a task grounded in cited process steps (deterministic;
+  `claude` variant behind `CORTEX_AGENT=llm`).
+- `GET /v1/skills` — the agent-consumable export: fresh + active process objects
+  with citations + a freshness manifest (stale only with `include_stale`, always
+  labeled; expired never served). The payload validates against the `cortex-agent`
+  schema.
+- **The YC-thesis close (blocking eval gate):** an external agent given only the
+  skills file routes a **$750 refund to finance with every action traceable to a
+  cited process step**; a $300 refund auto-issues via support — grounded
+  reasoning over the cited threshold steps, not a hardcode.
+
+### Project status
+M0–M6 of the roadmap are complete; 192 tests green with the eval gate blocking.
+
 ### Added — M5 (ML depth: embedding fine-tune)
 - Synthetic query generation (`finetune.py`): deterministic salient-keyword
   template default, `claude-haiku-4-5` behind `CORTEX_QUERYGEN=llm`, both

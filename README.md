@@ -147,10 +147,10 @@ curl -s localhost:8000/healthz   # -> {"status":"ok"}
 ```
 
 `/v1/search` (hybrid), `/v1/ask` (grounded + freshness-labeled),
-`/v1/processes` (+ review), and `/v1/ingest/events` are live, all
-tenant-filtered; `/v1/skills` export lands in **M6** (see
-[`docs/ROADMAP.md`](docs/ROADMAP.md)). `just sweep` expires stale knowledge. Run
-`just` to list all developer tasks.
+`/v1/processes` (+ review), `/v1/ingest/events`, and `/v1/skills` (the
+agent-consumable export) are live, all tenant-filtered. `just sweep` expires
+stale knowledge; `just train-embeddings` runs the fine-tune. Run `just` to list
+all developer tasks.
 
 ---
 
@@ -165,15 +165,16 @@ and quality gate are in [`docs/TEST-STRATEGY.md`](docs/TEST-STRATEGY.md).
 
 ## Status
 
-Pre-alpha. **M5 (ML depth) complete**: a domain embedding fine-tune pipeline —
-synthetic query generation (round-trip filtered), hard-negative mining,
-contrastive BGE fine-tune (`MultipleNegativesRankingLoss`), an A/B acceptance
-gate (ship only on ≥ 0.05 Recall@10 / ≥ 0.03 nDCG@10 vs base), and the fine-tuned
-model **swapped into serving behind a flag** (`CORTEX_EMBEDDER=finetuned`). The
-pipeline + gate + swap are CI-tested deterministically; the headline deltas are
-produced by running `scripts/train_embeddings.py` with the `ml` extra + compute
-(documented, not CI-gated). M4 shipped multi-tenant RLS + a blocking cross-tenant
-leakage gate, rate limiting, and k8s/Terraform; M3 the freshness loop; M2 the
-cited, versioned **process objects** (citation validity 1.00); M1 hybrid
-retrieval at Recall@10 0.95 / nDCG@10 0.91; M0 the dense-only slice. Build order
-and acceptance gates: [`docs/ROADMAP.md`](docs/ROADMAP.md).
+Pre-alpha — **the full M0–M6 roadmap is complete.** The loop closes at **M6
+(skills export + agent demo)**: `GET /v1/skills` projects active, non-stale
+process objects into an agent-consumable skills file (freshness manifest +
+citations), and a reference agent given **only** that file completes the
+scripted task — routing a **$750 refund to finance with every action traceable
+to a cited process step** (a blocking eval gate). Underneath: **M5** a domain
+embedding fine-tune pipeline + A/B gate + flag-gated serving swap; **M4**
+multi-tenant Postgres RLS with a blocking cross-tenant leakage gate, rate
+limiting, and k8s/Terraform; **M3** the change-driven freshness loop; **M2** the
+cited, versioned process objects (citation validity 1.00, blocking); **M1**
+hybrid retrieval at Recall@10 0.95 / nDCG@10 0.91; **M0** the dense-only vertical
+slice. 192 tests green with the eval gate blocking. Build order and acceptance
+gates: [`docs/ROADMAP.md`](docs/ROADMAP.md).
