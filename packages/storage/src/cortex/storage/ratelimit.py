@@ -14,6 +14,8 @@ per-source **egress** limits in ingestion. `allow(key)` returns
 
 from __future__ import annotations
 
+import asyncio
+import math
 import time
 from typing import Protocol
 
@@ -109,3 +111,24 @@ def build_limiter(
         client = aioredis.from_url(redis_url, decode_responses=True)  # type: ignore[no-untyped-call]
         return RedisRateLimiter(client, capacity, refill_per_second, namespace=namespace)
     return InMemoryRateLimiter(capacity, refill_per_second)
+
+
+async def acquire(
+    limiter: RateLimiter, key: str, *, cost: int = 1, max_wait: float = 30.0
+) -> float:
+    """Block (sleeping on the bucket's refill) until `cost` tokens are available.
+
+    The egress path: a connector waits for its per-source quota rather than being
+    rejected. Returns the seconds waited; raises `TimeoutError` if the wait would
+    exceed `max_wait` (or the bucket can never refill), so a misconfigured bucket
+    fails loudly instead of hanging.
+    """
+    waited = 0.0
+    while True:
+        ok, retry = await limiter.allow(key, cost)
+        if ok:
+            return waited
+        if not math.isfinite(retry) or waited + retry > max_wait:
+            raise TimeoutError(f"egress rate-limit budget exceeded for {key!r}")
+        await asyncio.sleep(retry)
+        waited += retry

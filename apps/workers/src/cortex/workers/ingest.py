@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import hashlib
+import os
 import uuid
 from collections.abc import Iterator
 from datetime import UTC, datetime
@@ -48,6 +49,8 @@ from cortex.storage import (
     Chunk,
     ChunkVector,
     Source,
+    acquire,
+    build_limiter,
     delete_artifact_points,
     ensure_collection,
     get_qdrant,
@@ -109,6 +112,16 @@ async def ingest_source(
     qclient = get_qdrant(qdrant_url)
     await ensure_collection(qclient, dim=embedder.dim)
 
+    # Egress: a per-source token bucket so a connector never exceeds the source's
+    # API quota (docs/INGESTION.md §4). Redis-backed across workers when REDIS_URL
+    # is set, else process-local; sized to the connector's documented rate limit.
+    egress = build_limiter(
+        connector.rate_limit.capacity,
+        connector.rate_limit.refill_per_second,
+        redis_url=os.environ.get("REDIS_URL"),
+        namespace="egress",
+    )
+
     stats = IngestStats()
     vectors: list[ChunkVector] = []
     sessionmaker = get_sessionmaker(dsn)
@@ -118,6 +131,8 @@ async def ingest_source(
         cfg = SourceConfig(kind=connector.kind)
 
         for raw in connector.backfill(cfg):
+            # Wait for an egress token before touching the source's next item.
+            await acquire(egress, connector.kind)
             art = connector.normalize(raw)
             content_hash = _hash(art.content)
 

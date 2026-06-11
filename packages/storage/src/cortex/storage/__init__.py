@@ -22,6 +22,7 @@ from cortex.storage.ratelimit import (
     InMemoryRateLimiter,
     RateLimiter,
     RedisRateLimiter,
+    acquire,
     build_limiter,
 )
 from cortex.storage.tenancy import resolve_tenant
@@ -38,6 +39,7 @@ __all__ = [
     "RedisRateLimiter",
     "SearchHit",
     "Source",
+    "acquire",
     "app_role_dsn",
     "build_limiter",
     "delete_artifact_points",
