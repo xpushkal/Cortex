@@ -8,6 +8,7 @@ dependencies = [
     "asyncpg>=0.29",
     "qdrant-client>=1.11",
     "pydantic>=2.7",
+    "redis>=5.0",
 ]
 
 [build-system]

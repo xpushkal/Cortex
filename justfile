@@ -34,6 +34,10 @@ seed:
 sweep:
     uv run python -m cortex.workers.freshness_sweep
 
+# Load-test /search against a running API (M4). Override flags as needed.
+loadtest *ARGS:
+    uv run python scripts/load_test.py {{ARGS}}
+
 # Run the API with autoreload.
 dev:
     uv run uvicorn cortex.api.main:app --reload --port 8000

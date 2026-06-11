@@ -124,5 +124,7 @@ scripted task with every action traceable to a cited process step.
   guarded by a blocking CI eval-regression gate.
 - Fine-tuned domain embeddings (contrastive + hard-negative mining) for **+[Z]%
   Recall@10** over the off-the-shelf baseline.
-- Designed multi-tenant infra (sharded vector store, per-tenant/per-source rate
-  limiting) load-tested to **[Q] QPS at p95 [L] ms** over a [M]-chunk index.
+- Designed multi-tenant infra: Postgres RLS + mandatory tenant filter (blocking
+  cross-tenant leakage gate), per-tenant/per-source token-bucket rate limiting, and
+  a sharded vector store, with a load-test harness + k8s/Terraform to hit the
+  600 QPS / p95 < 200 ms target at scale.

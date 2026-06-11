@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cortex.api.deps import db_session, tenant_id
+from cortex.api.ratelimit import rate_limit
 from cortex.knowledge import (
     ProcessSummary,
     get_process_body,
@@ -36,7 +37,11 @@ class ProcessListResponse(BaseModel):
     next_cursor: str | None = None
 
 
-@router.get("/v1/processes", response_model=ProcessListResponse)
+@router.get(
+    "/v1/processes",
+    response_model=ProcessListResponse,
+    dependencies=[Depends(rate_limit("read"))],
+)
 async def list_processes_endpoint(
     tenant: Annotated[uuid.UUID, Depends(tenant_id)],
     session: Annotated[AsyncSession, Depends(db_session)],

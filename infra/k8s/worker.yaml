@@ -1,0 +1,77 @@
+# Ingestion worker Deployment + HPA, and the freshness TTL sweep CronJob.
+# Workers autoscale on queue depth (a custom Prometheus metric via the
+# prometheus-adapter) so ingestion backlog drains without starving live updates
+# (docs/INGESTION.md §6); CPU is the fallback signal.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cortex-worker
+  namespace: cortex
+  labels: { app: cortex-worker }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: cortex-worker }
+  template:
+    metadata:
+      labels: { app: cortex-worker }
+    spec:
+      containers:
+        - name: worker
+          image: ghcr.io/xpushkal/cortex-worker:latest
+          envFrom:
+            - configMapRef: { name: cortex-config }
+            - secretRef: { name: cortex-secrets }
+          resources:
+            requests: { cpu: "1", memory: "1Gi" }
+            limits: { cpu: "4", memory: "4Gi" }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cortex-worker
+  namespace: cortex
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cortex-worker
+  minReplicas: 2
+  maxReplicas: 20
+  metrics:
+    # Primary: scale on ingestion queue depth (custom metric, prometheus-adapter).
+    - type: Pods
+      pods:
+        metric:
+          name: cortex_ingest_queue_depth
+        target:
+          type: AverageValue
+          averageValue: "100"
+    # Fallback: CPU saturation.
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 75
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cortex-freshness-sweep
+  namespace: cortex
+spec:
+  schedule: "*/15 * * * *"  # expire knowledge past its TTL every 15 minutes
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: sweep
+              image: ghcr.io/xpushkal/cortex-worker:latest
+              command: ["python", "-m", "cortex.workers.freshness_sweep"]
+              envFrom:
+                - configMapRef: { name: cortex-config }
+                - secretRef: { name: cortex-secrets }

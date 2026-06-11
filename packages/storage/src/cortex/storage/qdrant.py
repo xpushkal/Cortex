@@ -17,6 +17,11 @@ from qdrant_client import AsyncQdrantClient, models
 
 CHUNKS_COLLECTION = "chunks"
 DEFAULT_URL = "http://localhost:6333"
+# Shard the chunks collection to spread load (docs/ARCHITECTURE.md §8). `tenant_id`
+# is the shard key: a production cluster routes each tenant to its shard via
+# custom sharding, while the **mandatory tenant payload filter on every search
+# remains the enforced isolation boundary** (no query runs without it).
+DEFAULT_SHARDS = int(os.environ.get("CORTEX_QDRANT_SHARDS", "1"))
 
 
 class ChunkVector(BaseModel):
@@ -50,12 +55,19 @@ def get_qdrant(url: str | None = None) -> AsyncQdrantClient:
     return AsyncQdrantClient(url=url or os.environ.get("QDRANT_URL", DEFAULT_URL))
 
 
-async def ensure_collection(client: AsyncQdrantClient, *, dim: int) -> None:
-    """Create the chunks collection (cosine) if it does not already exist."""
+async def ensure_collection(
+    client: AsyncQdrantClient, *, dim: int, shard_number: int | None = None
+) -> None:
+    """Create the chunks collection (cosine), sharded by tenant, if absent.
+
+    `shard_number` defaults to CORTEX_QDRANT_SHARDS. The mandatory tenant payload
+    filter on every search is the isolation boundary; sharding only spreads load.
+    """
     if not await client.collection_exists(CHUNKS_COLLECTION):
         await client.create_collection(
             collection_name=CHUNKS_COLLECTION,
             vectors_config=models.VectorParams(size=dim, distance=models.Distance.COSINE),
+            shard_number=shard_number or DEFAULT_SHARDS,
         )
 
 

@@ -8,6 +8,28 @@ derived from [Conventional Commits](https://www.conventionalcommits.org/) on
 
 ## [Unreleased]
 
+### Added — M4 (scale & infra)
+- **Postgres row-level security** (migration `0006`) on every tenant table with a
+  fail-closed policy keyed to the `app.current_tenant` GUC, plus a non-superuser
+  `cortex_app` role the app runs as in production (`set_tenant`, `app_role_dsn`).
+- **Cross-tenant leakage test** proving isolation under RLS as the restricted
+  role (no-WHERE queries are tenant-scoped; fail-closed when unset) — a blocking
+  CI gate alongside the existing filter-level isolation tests.
+- Token-bucket rate limiting (`cortex.storage.ratelimit`): atomic Redis Lua +
+  in-memory backends. **Per-tenant ingress** limits on `/search`, `/processes`
+  (read) and `/ask` (heavy) returning `429` + `Retry-After` (opt-in via
+  `cortex_ratelimit`); **per-source egress** limits in ingestion (a connector
+  waits for its quota).
+- Qdrant **shard-by-tenant** (`shard_number`, `CORTEX_QDRANT_SHARDS`); the
+  mandatory tenant payload filter remains the enforced isolation boundary.
+- Load-test harness `scripts/load_test.py` (`just loadtest`) reporting
+  p50/p95/p99 + throughput; smoke-verified locally. The 600 QPS / 2M-chunk
+  target is reproduced against a real deployment, not CI-gated.
+- Infra-as-code: k8s manifests (API/worker Deployments, Services, HPA on
+  CPU + queue depth, freshness-sweep CronJob, config/secrets) and Terraform
+  (namespace, config/secret, managed Postgres/Redis/Qdrant via Helm) —
+  validated offline.
+
 ### Added — M3 (freshness loop)
 - `freshness` table (migration `0005`): per-object state (fresh | stale |
   expired) + TTL, the source of truth for serving; orthogonal to

@@ -21,6 +21,16 @@ class Settings(BaseSettings):
 
     llm_provider: str = "anthropic"
 
+    # Per-tenant ingress rate limiting (docs/API.md). Opt-in so shared test/dev
+    # runs aren't throttled; production sets cortex_ratelimit=true.
+    cortex_ratelimit: bool = False
+    # read bucket: /search, /processes — 60 req / 10 s.
+    ratelimit_read_capacity: int = 60
+    ratelimit_read_refill_per_second: float = 6.0
+    # heavy bucket: /ask (LLM cost) — 10 req / 10 s.
+    ratelimit_heavy_capacity: int = 10
+    ratelimit_heavy_refill_per_second: float = 1.0
+
 
 def get_settings() -> Settings:
     """Construct settings. Wrap in lru_cache once hot paths read it frequently."""

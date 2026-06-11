@@ -1,0 +1,27 @@
+# Non-secret configuration shared by the API and workers (docs/ARCHITECTURE.md §10).
+# Secrets (DSN passwords, API keys) live in the Secret below — populate from a
+# real secret manager (SOPS / External Secrets / cloud KMS); never commit values.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cortex-config
+  namespace: cortex
+data:
+  CORTEX_ENV: "production"
+  QDRANT_URL: "http://qdrant:6333"
+  REDIS_URL: "redis://redis:6379/0"
+  CORTEX_QDRANT_SHARDS: "6"
+  CORTEX_RATELIMIT: "true"
+  CORTEX_EMBEDDER: "bge"
+  EVAL_GATE: "advisory"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cortex-secrets
+  namespace: cortex
+type: Opaque
+stringData:
+  # The app runs as the least-privilege cortex_app role (RLS enforced).
+  POSTGRES_DSN: "postgresql+asyncpg://cortex_app:REPLACE_ME@postgres:5432/cortex"
+  ANTHROPIC_API_KEY: "REPLACE_ME"
