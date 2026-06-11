@@ -165,12 +165,13 @@ and quality gate are in [`docs/TEST-STRATEGY.md`](docs/TEST-STRATEGY.md).
 
 ## Status
 
-Pre-alpha. **M3 (freshness loop) complete**: change-driven re-ingest via
-`POST /v1/ingest/events`, a `freshness` table with TTL expiry sweep, and
-contradiction detection that re-versions a changed process and marks it stale —
-so `/v1/ask` and `/v1/processes` never serve stale/expired knowledge as current
-(every answer freshness-labeled; expired processes drop out of grounding). M2
-(knowledge structuring) shipped the provenance-tracked graph + versioned,
-faithfulness-gated **process objects** (citation validity 1.00, a blocking CI
-gate); M1 hybrid retrieval at Recall@10 0.95 / nDCG@10 0.91; M0 the dense-only
-slice. Build order and acceptance gates: [`docs/ROADMAP.md`](docs/ROADMAP.md).
+Pre-alpha. **M4 (scale & infra) complete**: defense-in-depth multi-tenancy —
+Postgres **row-level security** enforced for a least-privilege role plus the
+mandatory tenant filter, with a **cross-tenant leakage test as a blocking CI
+gate** — per-tenant ingress + per-source egress token-bucket rate limiting,
+Qdrant shard-by-tenant, a load-test harness, and k8s + Terraform infra. (The
+600 QPS / 2M-chunk throughput target is reproduced against a real deployment
+via the harness, not CI-gated.) M3 shipped the change-driven freshness loop;
+M2 the cited, versioned **process objects** (citation validity 1.00, blocking);
+M1 hybrid retrieval at Recall@10 0.95 / nDCG@10 0.91; M0 the dense-only slice.
+Build order and acceptance gates: [`docs/ROADMAP.md`](docs/ROADMAP.md).

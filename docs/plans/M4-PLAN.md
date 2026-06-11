@@ -1,6 +1,6 @@
 # M4 Plan — Scale & Infra
 
-**Status:** Active
+**Status:** Complete (2026-06-11) — RLS + mandatory filter with a blocking cross-tenant leakage gate; per-tenant/per-source rate limiting; Qdrant sharding; load-test harness (smoke ~244 req/s p95 122ms on one dev process); k8s + Terraform (validated offline). Throughput target documented, not CI-gated (the honesty split).
 **Branch:** `M4`
 **Roadmap gate (done-when):** sustained 600 QPS on `/search` at p95 < 200 ms over
 a 2M-chunk index; ingestion ≥ 500 docs/min/worker; **cross-tenant leakage test
