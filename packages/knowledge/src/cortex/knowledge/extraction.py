@@ -135,15 +135,21 @@ class LlmProcessSynth:
             json_schema=self._SCHEMA,
         )
         payload = json.loads(raw)
-        steps = [
-            ProcessStep(
-                ordinal=i + 1,
-                action=s["action"],
-                actor=s.get("actor"),
-                citations=[Citation(chunk_id=s["chunk_id"])],
-            )
-            for i, s in enumerate(payload.get("steps", []))
-        ]
+        # JSON mode instructs but doesn't enforce the schema; keep only well-formed,
+        # cited steps (an action + a chunk_id) and drop the rest.
+        steps: list[ProcessStep] = []
+        for s in payload.get("steps", []):
+            action = s.get("action") or s.get("step")
+            chunk_id = s.get("chunk_id") or s.get("citation")
+            if action and chunk_id:
+                steps.append(
+                    ProcessStep(
+                        ordinal=len(steps) + 1,
+                        action=action,
+                        actor=s.get("actor"),
+                        citations=[Citation(chunk_id=chunk_id)],
+                    )
+                )
         if not steps:
             return None
         return Process(name=cluster.name, trigger=cluster.trigger, steps=steps)

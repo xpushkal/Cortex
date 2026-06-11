@@ -57,6 +57,40 @@ def test_openrouter_request_shape(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "entities" in body["messages"][0]["content"]
 
 
+def test_openrouter_retries_transient_drop(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CORTEX_LLM_PROVIDER", "openrouter")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    monkeypatch.setattr("cortex.obs.llm.time.sleep", lambda _s: None)  # no real backoff
+    calls = {"n": 0}
+
+    def flaky_post(url: str, *, headers: dict, json: dict, timeout: float) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise httpx.RemoteProtocolError("peer closed connection")  # transient
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "ok"}}]},
+            request=httpx.Request("POST", url),
+        )
+
+    monkeypatch.setattr(httpx, "post", flaky_post)
+    assert complete(system="s", user="u") == "ok"
+    assert calls["n"] == 2  # retried past the drop
+
+
+def test_openrouter_retries_then_gives_up(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CORTEX_LLM_PROVIDER", "openrouter")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    monkeypatch.setattr("cortex.obs.llm.time.sleep", lambda _s: None)
+
+    def always_drops(url: str, *, headers: dict, json: dict, timeout: float) -> httpx.Response:
+        raise httpx.ConnectError("down")
+
+    monkeypatch.setattr(httpx, "post", always_drops)
+    with pytest.raises(httpx.TransportError):
+        complete(system="s", user="u")
+
+
 def test_openrouter_default_model(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CORTEX_LLM_PROVIDER", "openrouter")
     monkeypatch.setenv("OPENROUTER_API_KEY", "k")

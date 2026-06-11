@@ -15,11 +15,14 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from typing import Any
 
 ANTHROPIC_DEFAULT_MODEL = "claude-opus-4-8"
 OPENROUTER_DEFAULT_MODEL = "anthropic/claude-3.5-sonnet"
 _OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+_RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
+_MAX_ATTEMPTS = 4
 
 
 def complete(
@@ -70,8 +73,6 @@ def _anthropic(
 def _openrouter(
     system: str, user: str, model: str | None, max_tokens: int, json_schema: dict[str, Any] | None
 ) -> str:
-    import httpx
-
     key = os.environ.get("OPENROUTER_API_KEY")
     if not key:
         raise RuntimeError("CORTEX_LLM_PROVIDER=openrouter needs OPENROUTER_API_KEY")
@@ -89,12 +90,38 @@ def _openrouter(
     }
     if json_schema is not None:
         body["response_format"] = {"type": "json_object"}
-    response = httpx.post(
-        _OPENROUTER_URL,
-        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-        json=body,
-        timeout=120.0,
-    )
-    response.raise_for_status()
+    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+    response = _post_with_retry(headers, body)
     content: str = response.json()["choices"][0]["message"]["content"]
     return content
+
+
+def _post_with_retry(headers: dict[str, str], body: dict[str, Any]) -> Any:
+    """POST with exponential backoff over transient drops / 429 / 5xx.
+
+    A single long-running ingest fans out hundreds of calls; without this one
+    transient `RemoteProtocolError` or rate-limit would abort the whole run.
+    """
+    import httpx
+
+    delay = 0.5
+    last_exc: Exception | None = None
+    for attempt in range(_MAX_ATTEMPTS):
+        try:
+            response = httpx.post(_OPENROUTER_URL, headers=headers, json=body, timeout=120.0)
+            if response.status_code in _RETRY_STATUS:
+                last_exc = httpx.HTTPStatusError(
+                    f"retryable status {response.status_code}",
+                    request=response.request,
+                    response=response,
+                )
+            else:
+                response.raise_for_status()
+                return response
+        except httpx.TransportError as exc:  # RemoteProtocolError, timeouts, conn resets
+            last_exc = exc
+        if attempt < _MAX_ATTEMPTS - 1:
+            time.sleep(delay)
+            delay *= 2
+    assert last_exc is not None
+    raise last_exc
