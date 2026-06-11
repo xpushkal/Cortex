@@ -7,9 +7,11 @@ Two implementations:
     CI without downloading a model. This is the default.
   - BGEEmbedder: the real base model, `bge-small-en-v1.5` (384-d). Lazy-imports
     sentence-transformers (the `ml` extra) so the base install stays light.
+  - FineTunedEmbedder: a domain fine-tuned sentence-transformers model loaded
+    from a path (M5) — the serving swap behind a flag.
 
-Select via CORTEX_EMBEDDER=hashing|bge (default hashing). The fine-tuned variant
-(M5) slots in here behind the same interface.
+Select via CORTEX_EMBEDDER=hashing|bge|finetuned (default hashing); the
+fine-tuned variant additionally reads CORTEX_EMBEDDER_MODEL=<path>.
 """
 
 from __future__ import annotations
@@ -18,7 +20,7 @@ import hashlib
 import math
 import os
 import re
-from typing import Protocol
+from typing import Any, Protocol
 
 DIM = 384  # matches bge-small-en-v1.5 and the Qdrant payload in docs/DATA_MODEL.md
 _TOKEN = re.compile(r"[a-z0-9]+")
@@ -70,11 +72,41 @@ class BGEEmbedder:
         return [list(map(float, v)) for v in vectors]
 
 
+class FineTunedEmbedder:
+    """A domain fine-tuned sentence-transformers model loaded from a path (`ml`).
+
+    The serving swap (M5): point `CORTEX_EMBEDDER_MODEL` at a model produced by
+    `scripts/train_embeddings.py`. `model` is injectable for tests; the real load
+    is lazy so the base install stays light.
+    """
+
+    def __init__(self, model_path: str, model: Any | None = None) -> None:
+        if model is None:
+            try:
+                from sentence_transformers import SentenceTransformer
+            except ImportError as exc:  # pragma: no cover - only without the extra
+                raise RuntimeError(
+                    "FineTunedEmbedder needs the 'ml' extra: uv sync --extra ml"
+                ) from exc
+            model = SentenceTransformer(model_path)
+        self._model = model
+        self.dim = int(model.get_sentence_embedding_dimension())
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        vectors = self._model.encode(texts, normalize_embeddings=True)
+        return [list(map(float, v)) for v in vectors]
+
+
 def get_embedder(name: str | None = None) -> Embedder:
-    """Return the configured embedder. CORTEX_EMBEDDER=hashing|bge (default hashing)."""
+    """Return the configured embedder. CORTEX_EMBEDDER=hashing|bge|finetuned."""
     choice = (name or os.environ.get("CORTEX_EMBEDDER", "hashing")).lower()
     if choice == "bge":
         return BGEEmbedder()
     if choice == "hashing":
         return HashingEmbedder()
+    if choice == "finetuned":
+        path = os.environ.get("CORTEX_EMBEDDER_MODEL")
+        if not path:
+            raise ValueError("CORTEX_EMBEDDER=finetuned needs CORTEX_EMBEDDER_MODEL=<path>")
+        return FineTunedEmbedder(path)
     raise ValueError(f"unknown embedder: {choice!r}")

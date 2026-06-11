@@ -5,7 +5,13 @@ See docs/RETRIEVAL_AND_ML.md for the design and the eval-gated quality bar.
 
 from cortex.retrieval.blurb import BlurbGenerator, TemplateBlurb, get_blurb_generator
 from cortex.retrieval.chunking import chunk
-from cortex.retrieval.embedding import DIM, Embedder, HashingEmbedder, get_embedder
+from cortex.retrieval.embedding import (
+    DIM,
+    Embedder,
+    FineTunedEmbedder,
+    HashingEmbedder,
+    get_embedder,
+)
 from cortex.retrieval.finetune import (
     LabeledQuery,
     QueryGenerator,
@@ -28,6 +34,7 @@ __all__ = [
     "DIM",
     "BlurbGenerator",
     "Embedder",
+    "FineTunedEmbedder",
     "HashingEmbedder",
     "LabeledQuery",
     "PassthroughReranker",
