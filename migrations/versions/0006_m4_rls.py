@@ -59,12 +59,18 @@ def upgrade() -> None:
     for table in _TENANT_TABLES:
         op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
         op.execute(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY")
-        # Fail-closed: an unset GUC yields NULL, which matches no rows.
+        # Fail-closed: an unset (or reset-to-empty) GUC yields NULL via NULLIF,
+        # which matches no rows. A custom GUC resets to '' (not NULL) after its
+        # first SET LOCAL, so the NULLIF guard is required, not cosmetic.
         op.execute(
             f"""
             CREATE POLICY tenant_isolation ON {table}
-              USING (tenant_id = current_setting('app.current_tenant', true)::uuid)
-              WITH CHECK (tenant_id = current_setting('app.current_tenant', true)::uuid)
+              USING (
+                tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid
+              )
+              WITH CHECK (
+                tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid
+              )
             """
         )
 
