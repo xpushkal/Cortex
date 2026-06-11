@@ -60,6 +60,35 @@ def test_small_refund_auto_issues_via_support() -> None:
     assert result.action.citations[0].chunk_id == "chunk-a"
 
 
+def test_searches_across_multiple_matching_skills() -> None:
+    # Regression (found running live): a refund *thread* skill with no threshold
+    # step is ordered before the refund *policy*. The agent must keep looking
+    # past it to the skill that actually has an applicable cited step.
+    thread = Skill(
+        name="alice: a customer is asking for a $750 refund on order 18233",
+        trigger="refund",
+        version=1,
+        freshness="fresh",
+        steps=[
+            SkillStep(
+                action="Once approved, support issues the refund from the admin panel.",
+                citations=[SkillCitation(chunk_id="thread-1")],
+            )
+        ],
+    )
+    skills = SkillsFile(
+        tenant="demo",
+        generated_at="t",
+        freshness_manifest=FreshnessManifest(fresh=2),
+        skills=[thread, REFUND_SKILL],  # thread first, like the live collation order
+    )
+    result = ReferenceAgent().run(skills, {"type": "refund", "amount_usd": 750})
+    assert result.completed
+    assert result.action is not None
+    assert "finance" in result.action.decision.lower()
+    assert result.action.citations[0].chunk_id == "chunk-b"
+
+
 def test_unsupported_task_not_completed() -> None:
     result = ReferenceAgent().run(SKILLS, {"type": "payroll"})
     assert not result.completed

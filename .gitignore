@@ -29,6 +29,7 @@ secrets/
 htmlcov/
 coverage.xml
 .eval-reports/
+.embeddings-report/
 
 # --- ML artifacts (models, checkpoints, embeddings) ---
 models/
