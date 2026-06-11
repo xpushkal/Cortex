@@ -35,6 +35,14 @@ def test_factory_requires_model_path(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_factory_finetuned_needs_ml_extra(monkeypatch: pytest.MonkeyPatch) -> None:
     # Path set, but the `ml` extra isn't installed in the base test env -> RuntimeError.
+    # Skip when sentence-transformers happens to be installed (a real model load
+    # would be attempted instead) — the ml-absent path is the CI case this guards.
+    try:
+        import sentence_transformers  # noqa: F401
+
+        pytest.skip("ml extra installed; the ml-absent error path is not exercised")
+    except ImportError:
+        pass
     monkeypatch.setenv("CORTEX_EMBEDDER_MODEL", "/models/cortex-bge-ft")
     with pytest.raises(RuntimeError, match="needs the 'ml' extra"):
         get_embedder("finetuned")

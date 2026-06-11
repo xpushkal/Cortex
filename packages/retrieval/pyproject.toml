@@ -17,7 +17,7 @@ cortex-obs = { workspace = true }
 [project.optional-dependencies]
 # Heavy ML deps kept optional so base `uv sync` stays fast. Install with
 # `uv sync --extra ml` (or --all-extras) when working on embeddings/rerank.
-ml = ["sentence-transformers>=3.0", "torch>=2.3"]
+ml = ["sentence-transformers>=3.0", "torch>=2.3", "datasets>=2.20", "accelerate>=1.1"]
 # LLM-generated contextual blurbs (CORTEX_BLURB_MODE=llm); template mode needs nothing.
 llm = ["anthropic>=0.50"]
 onnx = ["onnxruntime>=1.18"]

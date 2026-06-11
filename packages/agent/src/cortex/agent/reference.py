@@ -56,12 +56,10 @@ def _step_applies(action: str, amount: float) -> bool | None:
     return None
 
 
-def _find_skill(skills: SkillsFile, keyword: str) -> Skill | None:
+def _matching_skills(skills: SkillsFile, keyword: str) -> list[Skill]:
+    """All skills whose name or trigger mentions the keyword (order preserved)."""
     needle = keyword.lower()
-    return next(
-        (s for s in skills.skills if needle in s.name.lower() or needle in s.trigger.lower()),
-        None,
-    )
+    return [s for s in skills.skills if needle in s.name.lower() or needle in s.trigger.lower()]
 
 
 class Agent(Protocol):
@@ -75,23 +73,24 @@ class ReferenceAgent:
         if task.get("type") != "refund":
             return AgentResult(completed=False, reason=f"unsupported task: {task.get('type')!r}")
         amount = float(task["amount_usd"])
-        skill = _find_skill(skills, "refund")
-        if skill is None:
+        candidates = _matching_skills(skills, "refund")
+        if not candidates:
             return AgentResult(completed=False, reason="no refund skill in the skills file")
-        for step in skill.steps:
-            if _step_applies(step.action, amount) and step.citations:
-                return AgentResult(
-                    completed=True,
-                    action=AgentAction(
-                        skill=skill.name,
-                        decision=step.action,
-                        actor=step.actor,
-                        citations=step.citations,
-                    ),
-                )
-        return AgentResult(
-            completed=False, reason=f"no cited step applies to ${amount:g} in {skill.name!r}"
-        )
+        # Search across ALL matching skills — several may mention refunds, but only
+        # the one with an applicable, cited threshold step grounds the action.
+        for skill in candidates:
+            for step in skill.steps:
+                if _step_applies(step.action, amount) and step.citations:
+                    return AgentResult(
+                        completed=True,
+                        action=AgentAction(
+                            skill=skill.name,
+                            decision=step.action,
+                            actor=step.actor,
+                            citations=step.citations,
+                        ),
+                    )
+        return AgentResult(completed=False, reason=f"no cited step applies to ${amount:g}")
 
 
 class LlmAgent:
@@ -108,7 +107,7 @@ class LlmAgent:
         self._model = model
 
     def run(self, skills: SkillsFile, task: dict[str, Any]) -> AgentResult:
-        skill = _find_skill(skills, str(task.get("type", "")))
+        skill = next(iter(_matching_skills(skills, str(task.get("type", "")))), None)
         response = self._client.messages.create(
             model=self._model,
             max_tokens=512,
