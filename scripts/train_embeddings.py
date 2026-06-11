@@ -107,7 +107,7 @@ def main() -> int:
     base_metrics = evaluate_embedder(base_embedder, test, corpus)
     finetuned_metrics = evaluate_embedder(FineTunedEmbedder(str(model_path)), test, corpus)
     report = ab_compare(base_metrics, finetuned_metrics)
-    json_path, md_path = emit_ab_report(report)
+    _, md_path = emit_ab_report(report)
     print(Path(md_path).read_text())
 
     if not report.passed:
