@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cortex.api.deps import db_session, tenant_id
+from cortex.api.ratelimit import rate_limit
 from cortex.knowledge import match_process
 from cortex.obs import get_tracer
 from cortex.retrieval import get_embedder, get_reranker, hybrid_search
@@ -78,7 +79,7 @@ def _compose_llm(question: str, context: list[str]) -> str:  # pragma: no cover 
     return text.strip()
 
 
-@router.post("/v1/ask", response_model=AskResponse)
+@router.post("/v1/ask", response_model=AskResponse, dependencies=[Depends(rate_limit("heavy"))])
 async def ask(
     req: AskRequest,
     tenant: Annotated[uuid.UUID, Depends(tenant_id)],

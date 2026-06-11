@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cortex.api.deps import db_session, tenant_id
+from cortex.api.ratelimit import rate_limit
 from cortex.obs import get_tracer
 from cortex.retrieval import SearchMode, get_embedder, get_reranker, hybrid_search
 from cortex.storage import SearchHit, get_qdrant
@@ -34,7 +35,9 @@ class SearchResponse(BaseModel):
     results: list[SearchHit]
 
 
-@router.post("/v1/search", response_model=SearchResponse)
+@router.post(
+    "/v1/search", response_model=SearchResponse, dependencies=[Depends(rate_limit("read"))]
+)
 async def search(
     req: SearchRequest,
     tenant: Annotated[uuid.UUID, Depends(tenant_id)],
