@@ -19,6 +19,7 @@ import uuid
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -309,20 +310,32 @@ def _load_dotenv(path: str = ".env") -> None:
         os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
 
-def _build_connector(source: str, *, repo: str | None) -> Connector:
+def _build_connector(
+    source: str,
+    *,
+    repo: str | None,
+    max_files: int | None = None,
+    max_items: int | None = None,
+) -> Connector:
     if source == "sample":
         return SampleConnector()
     if source == "github":
         if not repo:
             raise SystemExit("github needs --repo owner/name")
-        return GitHubConnector(repo=repo)
+        caps: dict[str, Any] = {
+            k: v for k, v in (("max_files", max_files), ("max_items", max_items)) if v is not None
+        }
+        return GitHubConnector(repo=repo, **caps)
     raise SystemExit(f"unknown source {source!r}; known: sample, github")
 
 
-async def _amain(source: str, tenant: str, *, repo: str | None) -> None:
+async def _amain(
+    source: str, tenant: str, *, repo: str | None, max_files: int | None, max_items: int | None
+) -> None:
     init_tracing("cortex-workers")
     tenant_id = resolve_tenant(tenant)
-    stats = await ingest_source(_build_connector(source, repo=repo), tenant_id=tenant_id)
+    connector = _build_connector(source, repo=repo, max_files=max_files, max_items=max_items)
+    stats = await ingest_source(connector, tenant_id=tenant_id)
     print(f"ingested tenant={tenant} ({tenant_id}): {stats.model_dump()}")
 
 
@@ -331,9 +344,19 @@ def main() -> None:
     parser.add_argument("--source", default="sample", help="sample | github")
     parser.add_argument("--tenant", required=True, help="tenant UUID or name")
     parser.add_argument("--repo", help="owner/name (required for --source github)")
+    parser.add_argument("--max-files", type=int, help="cap markdown files (github)")
+    parser.add_argument("--max-items", type=int, help="cap issues+PRs (github)")
     args = parser.parse_args()
     _load_dotenv()
-    asyncio.run(_amain(args.source, args.tenant, repo=args.repo))
+    asyncio.run(
+        _amain(
+            args.source,
+            args.tenant,
+            repo=args.repo,
+            max_files=args.max_files,
+            max_items=args.max_items,
+        )
+    )
 
 
 if __name__ == "__main__":

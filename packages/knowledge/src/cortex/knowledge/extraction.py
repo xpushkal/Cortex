@@ -18,7 +18,6 @@ Select via CORTEX_EXTRACTOR=heuristic|llm (default heuristic).
 
 from __future__ import annotations
 
-import json
 import os
 import re
 from collections.abc import Callable
@@ -32,6 +31,7 @@ from cortex.knowledge.models import (
     ProcessStep,
 )
 from cortex.obs import complete as llm_complete
+from cortex.obs import loads_json
 
 # A pluggable LLM completion callable (cortex.obs.complete), injectable for tests.
 Completer = Callable[..., str]
@@ -134,16 +134,22 @@ class LlmProcessSynth:
             max_tokens=2048,
             json_schema=self._SCHEMA,
         )
-        payload = json.loads(raw)
-        steps = [
-            ProcessStep(
-                ordinal=i + 1,
-                action=s["action"],
-                actor=s.get("actor"),
-                citations=[Citation(chunk_id=s["chunk_id"])],
-            )
-            for i, s in enumerate(payload.get("steps", []))
-        ]
+        payload = loads_json(raw)
+        # JSON mode instructs but doesn't enforce the schema; keep only well-formed,
+        # cited steps (an action + a chunk_id) and drop the rest.
+        steps: list[ProcessStep] = []
+        for s in payload.get("steps", []):
+            action = s.get("action") or s.get("step")
+            chunk_id = s.get("chunk_id") or s.get("citation")
+            if action and chunk_id:
+                steps.append(
+                    ProcessStep(
+                        ordinal=len(steps) + 1,
+                        action=action,
+                        actor=s.get("actor"),
+                        citations=[Citation(chunk_id=chunk_id)],
+                    )
+                )
         if not steps:
             return None
         return Process(name=cluster.name, trigger=cluster.trigger, steps=steps)

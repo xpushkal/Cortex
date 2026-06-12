@@ -17,8 +17,9 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 from cortex.obs.llm import complete as complete  # re-export the LLM gateway
+from cortex.obs.llm import loads_json as loads_json
 
-__all__ = ["complete", "get_tracer", "init_tracing"]
+__all__ = ["complete", "get_tracer", "init_tracing", "loads_json"]
 
 _initialized = False
 

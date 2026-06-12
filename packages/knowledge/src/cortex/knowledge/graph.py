@@ -15,7 +15,6 @@ Select via CORTEX_EXTRACTOR=heuristic|llm (default heuristic).
 
 from __future__ import annotations
 
-import json
 import os
 import re
 from collections.abc import Callable
@@ -23,6 +22,7 @@ from typing import Any, ClassVar, Protocol
 
 from cortex.knowledge.models import EntityCandidate, RelationCandidate
 from cortex.obs import complete as llm_complete
+from cortex.obs import loads_json
 
 # A pluggable LLM completion callable (cortex.obs.complete), injectable for tests.
 Completer = Callable[..., str]
@@ -194,23 +194,36 @@ class LlmExtractor:
             max_tokens=1024,
             json_schema=self._SCHEMA,
         )
-        payload = json.loads(raw)
-        entities = [
-            EntityCandidate(
-                name=e["name"], type=e["type"], source_chunk_id=chunk_id, confidence=0.9
-            )
-            for e in payload.get("entities", [])
-        ]
-        relations = [
-            RelationCandidate(
-                subject=r["subject"],
-                predicate=r["predicate"],
-                object=r["object"],
-                source_chunk_id=chunk_id,
-                confidence=0.9,
-            )
-            for r in payload.get("relations", [])
-        ]
+        payload = loads_json(raw)
+        # JSON mode instructs but doesn't enforce the schema (weaker models alias
+        # or drop keys), so parse defensively: accept common aliases, skip the rest.
+        entities: list[EntityCandidate] = []
+        for e in payload.get("entities", []):
+            name = e.get("name") or e.get("entity")
+            if name:
+                entities.append(
+                    EntityCandidate(
+                        name=name,
+                        type=e.get("type") or "unknown",
+                        source_chunk_id=chunk_id,
+                        confidence=0.9,
+                    )
+                )
+        relations: list[RelationCandidate] = []
+        for r in payload.get("relations", []):
+            subject = r.get("subject") or r.get("source")
+            obj = r.get("object") or r.get("target")
+            predicate = r.get("predicate") or r.get("relation")
+            if subject and predicate and obj:
+                relations.append(
+                    RelationCandidate(
+                        subject=subject,
+                        predicate=predicate,
+                        object=obj,
+                        source_chunk_id=chunk_id,
+                        confidence=0.9,
+                    )
+                )
         return entities, relations
 
 
