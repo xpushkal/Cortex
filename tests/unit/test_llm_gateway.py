@@ -8,6 +8,18 @@ import httpx
 import pytest
 
 from cortex.obs import complete
+from cortex.obs.llm import loads_json
+
+
+def test_loads_json_tolerates_messy_replies() -> None:
+    assert loads_json('{"a": 1}') == {"a": 1}
+    # fenced + prose around the JSON (common with weak models)
+    assert loads_json('```json\n{"a": 1}\n```') == {"a": 1}
+    assert loads_json('Sure! Here:\n{"a": 1}\nHope that helps') == {"a": 1}
+    # empty / null / unparseable -> {} (skip, never raise)
+    assert loads_json("") == {}
+    assert loads_json("   ") == {}
+    assert loads_json("not json at all") == {}
 
 
 def test_unknown_provider_rejected(monkeypatch: pytest.MonkeyPatch) -> None:

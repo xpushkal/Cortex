@@ -15,7 +15,6 @@ Select via CORTEX_EXTRACTOR=heuristic|llm (default heuristic).
 
 from __future__ import annotations
 
-import json
 import os
 import re
 from collections.abc import Callable
@@ -23,6 +22,7 @@ from typing import Any, ClassVar, Protocol
 
 from cortex.knowledge.models import EntityCandidate, RelationCandidate
 from cortex.obs import complete as llm_complete
+from cortex.obs import loads_json
 
 # A pluggable LLM completion callable (cortex.obs.complete), injectable for tests.
 Completer = Callable[..., str]
@@ -194,7 +194,7 @@ class LlmExtractor:
             max_tokens=1024,
             json_schema=self._SCHEMA,
         )
-        payload = json.loads(raw)
+        payload = loads_json(raw)
         # JSON mode instructs but doesn't enforce the schema (weaker models alias
         # or drop keys), so parse defensively: accept common aliases, skip the rest.
         entities: list[EntityCandidate] = []

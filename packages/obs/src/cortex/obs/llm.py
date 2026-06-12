@@ -25,6 +25,27 @@ _RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
 _MAX_ATTEMPTS = 4
 
 
+def loads_json(text: str) -> Any:
+    """Best-effort parse of an LLM JSON reply — `{}` on failure, never raises.
+
+    JSON mode isn't enforced, so weak models wrap output in ``` fences, add prose,
+    or return empty/null. Try a clean parse, then the widest `{...}` span, then
+    give up with an empty dict so one bad reply skips rather than aborts ingest.
+    """
+    if not text or not text.strip():
+        return {}
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        start, end = text.find("{"), text.rfind("}")
+        if 0 <= start < end:
+            try:
+                return json.loads(text[start : end + 1])
+            except json.JSONDecodeError:
+                return {}
+        return {}
+
+
 def complete(
     *,
     system: str,
@@ -92,8 +113,10 @@ def _openrouter(
         body["response_format"] = {"type": "json_object"}
     headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
     response = _post_with_retry(headers, body)
-    content: str = response.json()["choices"][0]["message"]["content"]
-    return content
+    message = response.json()["choices"][0]["message"]
+    # Reasoning models sometimes leave `content` null and put text in `reasoning`.
+    content = message.get("content") or message.get("reasoning") or ""
+    return str(content)
 
 
 def _post_with_retry(headers: dict[str, str], body: dict[str, Any]) -> Any:
