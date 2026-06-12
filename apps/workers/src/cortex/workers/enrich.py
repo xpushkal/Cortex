@@ -9,6 +9,7 @@ de-duplicate and version rather than clobber.
 
 from __future__ import annotations
 
+import sys
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,10 +45,17 @@ async def enrich_artifact(
     extractor: Extractor,
 ) -> None:
     """Extract + persist the graph and process objects for one artifact's chunks."""
+    # Best-effort enrichment: an LLM extractor can fail on a chunk (provider error,
+    # malformed reply) — skip that chunk rather than abort the whole ingest. The
+    # deterministic heuristic extractor never raises, so this is a no-op for it.
     entities: list[EntityCandidate] = []
     relations: list[RelationCandidate] = []
     for ref in chunks:
-        ents, rels = extractor.extract(ref.chunk_id, ref.text)
+        try:
+            ents, rels = extractor.extract(ref.chunk_id, ref.text)
+        except Exception as exc:
+            print(f"warn: entity extraction skipped chunk {ref.chunk_id}: {exc}", file=sys.stderr)
+            continue
         entities.extend(ents)
         relations.extend(rels)
 
@@ -60,7 +68,12 @@ async def enrich_artifact(
         alias.lower(): ent.name for ent in resolved for alias in [ent.name, *ent.aliases]
     }
     cluster = ProcessCluster(name=name, trigger=trigger, chunks=chunks)
-    for proc in extract_processes([cluster]):
+    try:
+        processes = extract_processes([cluster])
+    except Exception as exc:
+        print(f"warn: process synthesis skipped {name!r}: {exc}", file=sys.stderr)
+        processes = []
+    for proc in processes:
         steps = [
             step.model_copy(update={"actor": _detect_actor(step.action, alias_to_canonical)})
             for step in proc.steps

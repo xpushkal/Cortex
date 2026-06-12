@@ -112,18 +112,23 @@ def _openrouter(
     if json_schema is not None:
         body["response_format"] = {"type": "json_object"}
     headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
-    response = _post_with_retry(headers, body)
-    message = response.json()["choices"][0]["message"]
+    data = _post_with_retry(headers, body)
+    choices = data.get("choices")
+    if not choices:
+        # OpenRouter wraps some upstream failures as HTTP 200 + {"error": {...}}.
+        raise RuntimeError(f"openrouter returned no choices: {str(data.get('error', data))[:200]}")
+    message = choices[0]["message"]
     # Reasoning models sometimes leave `content` null and put text in `reasoning`.
     content = message.get("content") or message.get("reasoning") or ""
     return str(content)
 
 
-def _post_with_retry(headers: dict[str, str], body: dict[str, Any]) -> Any:
-    """POST with exponential backoff over transient drops / 429 / 5xx.
+def _post_with_retry(headers: dict[str, str], body: dict[str, Any]) -> dict[str, Any]:
+    """POST and return the parsed JSON, with backoff over transient failures.
 
-    A single long-running ingest fans out hundreds of calls; without this one
-    transient `RemoteProtocolError` or rate-limit would abort the whole run.
+    A long ingest fans out hundreds of calls; one transient drop, rate-limit, or
+    5xx must not abort it. Retries cover transport errors, HTTP 429/5xx, AND
+    OpenRouter's 200-wrapped `{"error": {"code": 429|5xx}}` envelopes.
     """
     import httpx
 
@@ -140,7 +145,12 @@ def _post_with_retry(headers: dict[str, str], body: dict[str, Any]) -> Any:
                 )
             else:
                 response.raise_for_status()
-                return response
+                data: dict[str, Any] = response.json()
+                error = data.get("error")
+                if error and _retryable_error_code(error):
+                    last_exc = RuntimeError(f"openrouter transient error: {error}")
+                else:
+                    return data
         except httpx.TransportError as exc:  # RemoteProtocolError, timeouts, conn resets
             last_exc = exc
         if attempt < _MAX_ATTEMPTS - 1:
@@ -148,3 +158,10 @@ def _post_with_retry(headers: dict[str, str], body: dict[str, Any]) -> Any:
             delay *= 2
     assert last_exc is not None
     raise last_exc
+
+
+def _retryable_error_code(error: dict[str, Any]) -> bool:
+    try:
+        return int(error.get("code", 0)) in _RETRY_STATUS
+    except (TypeError, ValueError):
+        return False
