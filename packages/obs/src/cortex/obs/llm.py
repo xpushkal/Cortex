@@ -28,7 +28,8 @@ ANTHROPIC_DEFAULT_MODEL = "claude-opus-4-8"
 OPENROUTER_DEFAULT_MODEL = "anthropic/claude-3.5-sonnet"
 _OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 _RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
-_MAX_ATTEMPTS = 4
+_MAX_ATTEMPTS = 6
+_MAX_BACKOFF = 30.0  # cap a single Retry-After / backoff wait (seconds)
 
 
 def loads_json(text: str) -> Any:
@@ -161,6 +162,7 @@ def _post_with_retry(url: str, headers: dict[str, str], body: dict[str, Any]) ->
     delay = 0.5
     last_exc: Exception | None = None
     for attempt in range(_MAX_ATTEMPTS):
+        wait = delay
         try:
             response = httpx.post(url, headers=headers, json=body, timeout=120.0)
             if response.status_code in _RETRY_STATUS:
@@ -169,6 +171,9 @@ def _post_with_retry(url: str, headers: dict[str, str], body: dict[str, Any]) ->
                     request=response.request,
                     response=response,
                 )
+                # Honor the server's Retry-After (free tiers send it on 429) so a
+                # rate-limited call waits the right amount instead of burning retries.
+                wait = _retry_after(response.headers, fallback=delay)
             else:
                 response.raise_for_status()
                 data: dict[str, Any] = response.json()
@@ -180,10 +185,21 @@ def _post_with_retry(url: str, headers: dict[str, str], body: dict[str, Any]) ->
         except httpx.TransportError as exc:  # RemoteProtocolError, timeouts, conn resets
             last_exc = exc
         if attempt < _MAX_ATTEMPTS - 1:
-            time.sleep(delay)
+            time.sleep(min(wait, _MAX_BACKOFF))
             delay *= 2
     assert last_exc is not None
     raise last_exc
+
+
+def _retry_after(headers: Any, *, fallback: float) -> float:
+    """Seconds to wait from a `Retry-After` header (delta-seconds), else fallback."""
+    value = headers.get("retry-after")
+    if value is None:
+        return fallback
+    try:
+        return max(float(value), fallback)
+    except (TypeError, ValueError):
+        return fallback
 
 
 def _retryable_error_code(error: dict[str, Any]) -> bool:

@@ -138,6 +138,25 @@ def test_openrouter_retries_transient_drop(monkeypatch: pytest.MonkeyPatch) -> N
     assert calls["n"] == 2  # retried past the drop
 
 
+def test_honors_retry_after_header(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CORTEX_LLM_PROVIDER", "openrouter")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    slept: list[float] = []
+    monkeypatch.setattr("cortex.obs.llm.time.sleep", lambda s: slept.append(s))
+    calls = {"n": 0}
+
+    def fake_post(url: str, *, headers: dict, json: dict, timeout: float) -> httpx.Response:
+        calls["n"] += 1
+        req = httpx.Request("POST", url)
+        if calls["n"] == 1:  # rate-limited, told to wait 7s
+            return httpx.Response(429, headers={"retry-after": "7"}, json={}, request=req)
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]}, request=req)
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    assert complete(system="s", user="u") == "ok"
+    assert slept == [7.0]  # waited exactly the server's Retry-After, not the 0.5s backoff
+
+
 def test_openrouter_retries_then_gives_up(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CORTEX_LLM_PROVIDER", "openrouter")
     monkeypatch.setenv("OPENROUTER_API_KEY", "k")
