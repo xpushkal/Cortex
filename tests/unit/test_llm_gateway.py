@@ -22,20 +22,68 @@ def test_loads_json_tolerates_messy_replies() -> None:
     assert loads_json("not json at all") == {}
 
 
-def test_unknown_provider_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CORTEX_LLM_PROVIDER", "ollama")
-    with pytest.raises(ValueError, match="unknown CORTEX_LLM_PROVIDER"):
+def _clear_llm_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    for var in ("CORTEX_LLM_BASE_URL", "CORTEX_LLM_API_KEY", "CORTEX_LLM_MODEL"):
+        monkeypatch.delenv(var, raising=False)
+
+
+def test_openai_compatible_provider_needs_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A non-anthropic provider with no base URL (and not openrouter) errors clearly.
+    _clear_llm_env(monkeypatch)
+    monkeypatch.setenv("CORTEX_LLM_PROVIDER", "groq")
+    with pytest.raises(RuntimeError, match="CORTEX_LLM_BASE_URL"):
         complete(system="s", user="u")
 
 
-def test_openrouter_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CORTEX_LLM_PROVIDER", "openrouter")
+def test_groq_request_shape(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The Groq path: custom base URL + key + model via the generic CORTEX_LLM_* vars.
+    _clear_llm_env(monkeypatch)
+    monkeypatch.setenv("CORTEX_LLM_PROVIDER", "groq")
+    monkeypatch.setenv("CORTEX_LLM_BASE_URL", "https://api.groq.com/openai/v1")
+    monkeypatch.setenv("CORTEX_LLM_API_KEY", "gsk_test")
+    monkeypatch.setenv("CORTEX_LLM_MODEL", "llama-3.3-70b-versatile")
+    captured: dict[str, Any] = {}
+
+    def fake_post(url: str, *, headers: dict, json: dict, timeout: float) -> httpx.Response:
+        captured["url"] = url
+        captured["headers"] = headers
+        captured["json"] = json
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "ok"}}]},
+            request=httpx.Request("POST", url),
+        )
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    assert complete(system="s", user="u") == "ok"
+    assert captured["url"] == "https://api.groq.com/openai/v1/chat/completions"
+    assert captured["headers"]["Authorization"] == "Bearer gsk_test"
+    assert captured["json"]["model"] == "llama-3.3-70b-versatile"
+
+
+def test_local_endpoint_needs_no_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Ollama-style local server: base URL, no API key -> no Authorization header.
+    _clear_llm_env(monkeypatch)
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-    with pytest.raises(RuntimeError, match="OPENROUTER_API_KEY"):
-        complete(system="s", user="u")
+    monkeypatch.setenv("CORTEX_LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("CORTEX_LLM_BASE_URL", "http://localhost:11434/v1")
+    captured: dict[str, Any] = {}
+
+    def fake_post(url: str, *, headers: dict, json: dict, timeout: float) -> httpx.Response:
+        captured["headers"] = headers
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "ok"}}]},
+            request=httpx.Request("POST", url),
+        )
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    assert complete(system="s", user="u") == "ok"
+    assert "Authorization" not in captured["headers"]
 
 
 def test_openrouter_request_shape(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_llm_env(monkeypatch)
     monkeypatch.setenv("CORTEX_LLM_PROVIDER", "openrouter")
     monkeypatch.setenv("OPENROUTER_API_KEY", "or-test-key")
     monkeypatch.setenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
@@ -104,6 +152,7 @@ def test_openrouter_retries_then_gives_up(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def test_openrouter_default_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    _clear_llm_env(monkeypatch)
     monkeypatch.setenv("CORTEX_LLM_PROVIDER", "openrouter")
     monkeypatch.setenv("OPENROUTER_API_KEY", "k")
     monkeypatch.delenv("OPENROUTER_MODEL", raising=False)

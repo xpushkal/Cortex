@@ -1,14 +1,20 @@
-"""Pluggable LLM gateway — Anthropic SDK or any OpenAI-compatible API (OpenRouter).
+"""Pluggable LLM gateway — Anthropic SDK or ANY OpenAI-compatible API.
 
 The LLM-gated paths (entity/relation extraction, process synthesis, blurbs,
 `/ask` prose, ...) call `complete()` so the provider is a **config flip, not a
 code change**:
 
-    CORTEX_LLM_PROVIDER=anthropic   # default; needs ANTHROPIC_API_KEY (+ the `llm` extra)
-    CORTEX_LLM_PROVIDER=openrouter  # needs OPENROUTER_API_KEY; model via OPENROUTER_MODEL
+    CORTEX_LLM_PROVIDER=anthropic    # default; needs ANTHROPIC_API_KEY (+ the `llm` extra)
+    CORTEX_LLM_PROVIDER=openrouter   # OpenAI-compatible @ OpenRouter; OPENROUTER_API_KEY
+    CORTEX_LLM_PROVIDER=openai       # any OpenAI-compatible endpoint via CORTEX_LLM_BASE_URL
 
-OpenRouter is OpenAI-compatible, so its path is plain HTTP (httpx) — no extra SDK
-install — and can serve Claude, GPT, Gemini, etc. behind one key.
+Any non-`anthropic` provider is treated as OpenAI-compatible (plain httpx, no
+extra SDK). Point `CORTEX_LLM_BASE_URL` at an `/v1` endpoint and it serves
+Groq, Ollama (local, free), GitHub Models, Gemini, vLLM, etc. behind one key:
+
+    # Groq (free):   CORTEX_LLM_BASE_URL=https://api.groq.com/openai/v1
+    # Ollama (local):CORTEX_LLM_BASE_URL=http://localhost:11434/v1   (no key)
+    # model via CORTEX_LLM_MODEL (or legacy OPENROUTER_MODEL); key via CORTEX_LLM_API_KEY.
 """
 
 from __future__ import annotations
@@ -20,7 +26,7 @@ from typing import Any
 
 ANTHROPIC_DEFAULT_MODEL = "claude-opus-4-8"
 OPENROUTER_DEFAULT_MODEL = "anthropic/claude-3.5-sonnet"
-_OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+_OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 _RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
 _MAX_ATTEMPTS = 4
 
@@ -63,9 +69,8 @@ def complete(
     provider = os.environ.get("CORTEX_LLM_PROVIDER", "anthropic").lower()
     if provider == "anthropic":
         return _anthropic(system, user, model, max_tokens, json_schema)
-    if provider == "openrouter":
-        return _openrouter(system, user, model, max_tokens, json_schema)
-    raise ValueError(f"unknown CORTEX_LLM_PROVIDER: {provider!r} (anthropic|openrouter)")
+    # Everything else is OpenAI-compatible (openrouter, openai, groq, ollama, ...).
+    return _openai_compatible(provider, system, user, model, max_tokens, json_schema)
 
 
 def _anthropic(
@@ -91,18 +96,37 @@ def _anthropic(
     return text
 
 
-def _openrouter(
-    system: str, user: str, model: str | None, max_tokens: int, json_schema: dict[str, Any] | None
+def _resolve_endpoint(provider: str) -> tuple[str, str | None]:
+    """(chat-completions URL, api_key) for an OpenAI-compatible provider."""
+    base = os.environ.get("CORTEX_LLM_BASE_URL")
+    if not base and provider == "openrouter":
+        base = _OPENROUTER_BASE  # back-compat: openrouter has a known default
+    if not base:
+        raise RuntimeError(
+            f"CORTEX_LLM_PROVIDER={provider!r} needs CORTEX_LLM_BASE_URL — an "
+            "OpenAI-compatible /v1 endpoint (e.g. https://api.groq.com/openai/v1)"
+        )
+    key = os.environ.get("CORTEX_LLM_API_KEY") or os.environ.get("OPENROUTER_API_KEY")
+    return base.rstrip("/") + "/chat/completions", key
+
+
+def _openai_compatible(
+    provider: str,
+    system: str,
+    user: str,
+    model: str | None,
+    max_tokens: int,
+    json_schema: dict[str, Any] | None,
 ) -> str:
-    key = os.environ.get("OPENROUTER_API_KEY")
-    if not key:
-        raise RuntimeError("CORTEX_LLM_PROVIDER=openrouter needs OPENROUTER_API_KEY")
+    url, key = _resolve_endpoint(provider)
     if json_schema is not None:
         system = (
             f"{system}\n\nRespond ONLY with JSON matching this schema:\n{json.dumps(json_schema)}"
         )
     body: dict[str, Any] = {
-        "model": model or os.environ.get("OPENROUTER_MODEL", OPENROUTER_DEFAULT_MODEL),
+        "model": model
+        or os.environ.get("CORTEX_LLM_MODEL")
+        or os.environ.get("OPENROUTER_MODEL", OPENROUTER_DEFAULT_MODEL),
         "max_tokens": max_tokens,
         "messages": [
             {"role": "system", "content": system},
@@ -111,24 +135,26 @@ def _openrouter(
     }
     if json_schema is not None:
         body["response_format"] = {"type": "json_object"}
-    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
-    data = _post_with_retry(headers, body)
+    headers = {"Content-Type": "application/json"}
+    if key:  # local servers (Ollama) need no key
+        headers["Authorization"] = f"Bearer {key}"
+    data = _post_with_retry(url, headers, body)
     choices = data.get("choices")
     if not choices:
-        # OpenRouter wraps some upstream failures as HTTP 200 + {"error": {...}}.
-        raise RuntimeError(f"openrouter returned no choices: {str(data.get('error', data))[:200]}")
+        # Some gateways wrap upstream failures as HTTP 200 + {"error": {...}}.
+        raise RuntimeError(f"{provider} returned no choices: {str(data.get('error', data))[:200]}")
     message = choices[0]["message"]
     # Reasoning models sometimes leave `content` null and put text in `reasoning`.
     content = message.get("content") or message.get("reasoning") or ""
     return str(content)
 
 
-def _post_with_retry(headers: dict[str, str], body: dict[str, Any]) -> dict[str, Any]:
+def _post_with_retry(url: str, headers: dict[str, str], body: dict[str, Any]) -> dict[str, Any]:
     """POST and return the parsed JSON, with backoff over transient failures.
 
     A long ingest fans out hundreds of calls; one transient drop, rate-limit, or
     5xx must not abort it. Retries cover transport errors, HTTP 429/5xx, AND
-    OpenRouter's 200-wrapped `{"error": {"code": 429|5xx}}` envelopes.
+    200-wrapped `{"error": {"code": 429|5xx}}` envelopes some gateways return.
     """
     import httpx
 
@@ -136,7 +162,7 @@ def _post_with_retry(headers: dict[str, str], body: dict[str, Any]) -> dict[str,
     last_exc: Exception | None = None
     for attempt in range(_MAX_ATTEMPTS):
         try:
-            response = httpx.post(_OPENROUTER_URL, headers=headers, json=body, timeout=120.0)
+            response = httpx.post(url, headers=headers, json=body, timeout=120.0)
             if response.status_code in _RETRY_STATUS:
                 last_exc = httpx.HTTPStatusError(
                     f"retryable status {response.status_code}",
@@ -148,7 +174,7 @@ def _post_with_retry(headers: dict[str, str], body: dict[str, Any]) -> dict[str,
                 data: dict[str, Any] = response.json()
                 error = data.get("error")
                 if error and _retryable_error_code(error):
-                    last_exc = RuntimeError(f"openrouter transient error: {error}")
+                    last_exc = RuntimeError(f"provider transient error: {error}")
                 else:
                     return data
         except httpx.TransportError as exc:  # RemoteProtocolError, timeouts, conn resets
