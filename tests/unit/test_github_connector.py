@@ -143,3 +143,21 @@ def test_json_payload_is_plain(monkeypatch: pytest.MonkeyPatch) -> None:
     # RawItem payloads must be JSON-serializable (they flow through the pipeline).
     items = list(_connector().backfill(CFG))
     json.dumps([i.payload for i in items])
+
+
+def test_get_retries_transient_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A backfill fans out hundreds of calls; one transient ReadTimeout must not abort it.
+    monkeypatch.setattr("cortex.connectors.github.time.sleep", lambda _s: None)
+    calls = {"n": 0}
+
+    def flaky(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/repos/acme/widgets":
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise httpx.ReadTimeout("timed out", request=request)
+        return _handler(request)
+
+    client = httpx.Client(transport=httpx.MockTransport(flaky), base_url="https://api.github.com")
+    items = list(GitHubConnector("acme/widgets", client=client).backfill(CFG))
+    assert calls["n"] == 2  # retried past the timeout
+    assert any(i.external_id == "file:README.md" for i in items)

@@ -21,6 +21,8 @@ import httpx
 from cortex.connectors.base import Artifact, Cursor, RawItem, SourceConfig, TokenBucketSpec
 
 _API = "https://api.github.com"
+_RETRY_STATUS = frozenset({500, 502, 503, 504})
+_MAX_ATTEMPTS = 5
 
 
 def _parse_dt(value: str | None) -> datetime:
@@ -76,13 +78,34 @@ class GitHubConnector:
     def _get(
         self, client: httpx.Client, path: str, params: dict[str, Any] | None = None
     ) -> httpx.Response:
-        resp = client.get(path, params=params)
-        if resp.status_code == 403 and resp.headers.get("X-RateLimit-Remaining") == "0":
-            reset = int(resp.headers.get("X-RateLimit-Reset", "0"))
-            time.sleep(min(max(0, reset - int(time.time())) + 1, 60))
-            resp = client.get(path, params=params)
-        resp.raise_for_status()
-        return resp
+        """GET with backoff over transient network errors / 5xx / rate limits.
+
+        A full backfill fans out hundreds of calls; one transient ReadTimeout or
+        502 must not abort it. The 403 + exhausted-quota case waits for the reset.
+        """
+        delay = 1.0
+        last_exc: Exception | None = None
+        for attempt in range(_MAX_ATTEMPTS):
+            try:
+                resp = client.get(path, params=params)
+                if resp.status_code == 403 and resp.headers.get("X-RateLimit-Remaining") == "0":
+                    reset = int(resp.headers.get("X-RateLimit-Reset", "0"))
+                    time.sleep(min(max(0, reset - int(time.time())) + 1, 60))
+                    continue
+                if resp.status_code in _RETRY_STATUS:
+                    last_exc = httpx.HTTPStatusError(
+                        f"retryable status {resp.status_code}", request=resp.request, response=resp
+                    )
+                else:
+                    resp.raise_for_status()
+                    return resp
+            except httpx.TransportError as exc:  # ReadTimeout, ConnectError, RemoteProtocolError
+                last_exc = exc
+            if attempt < _MAX_ATTEMPTS - 1:
+                time.sleep(delay)
+                delay *= 2
+        assert last_exc is not None
+        raise last_exc
 
     # --- Connector protocol -----------------------------------------------------
 
