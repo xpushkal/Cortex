@@ -38,6 +38,10 @@ sweep:
 loadtest *ARGS:
     uv run python scripts/load_test.py {{ARGS}}
 
+# In-process latency-regression smoke (needs infra; docs/SCALE.md).
+loadtest-smoke:
+    uv run pytest -m load -s
+
 # Fine-tune domain embeddings (M5; needs the `ml` extra: uv sync --extra ml).
 train-embeddings *ARGS:
     uv run python scripts/train_embeddings.py {{ARGS}}
