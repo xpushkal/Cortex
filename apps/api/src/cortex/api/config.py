@@ -21,6 +21,10 @@ class Settings(BaseSettings):
 
     llm_provider: str = "anthropic"
 
+    # When true, POST /v1/ingest/events enqueues to the arq worker (non-blocking)
+    # instead of ingesting inline. Off by default so tests/dev keep read-after-write.
+    cortex_worker_async: bool = False
+
     # Per-tenant ingress rate limiting (docs/API.md). Opt-in so shared test/dev
     # runs aren't throttled; production sets cortex_ratelimit=true.
     cortex_ratelimit: bool = False

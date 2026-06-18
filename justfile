@@ -46,6 +46,10 @@ train-embeddings *ARGS:
 dev:
     uv run uvicorn cortex.api.main:app --reload --port 8000
 
+# Run the arq ingestion worker (drains the queue; needs Redis + CORTEX_WORKER_ASYNC=true on the API).
+worker:
+    uv run arq cortex.workers.main.WorkerSettings
+
 # Lint + format check.
 lint:
     uv run ruff check .

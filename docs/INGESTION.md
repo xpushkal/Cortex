@@ -48,8 +48,11 @@ flowchart LR
 ```
 
 Each stage is a unit-testable function. The worker (`apps/workers`, `arq`)
-orchestrates them per job. Embeddings and LLM extraction are **batched** across a
-job's chunks to amortize cost.
+orchestrates them per job: `run_pipeline` (`cortex.workers.pipeline`) is the arq
+task, and the API enqueues it via `enqueue_ingest_event` when `CORTEX_WORKER_ASYNC`
+is set (else it runs inline). A single default queue today; the `realtime > backfill
+> reprocess` priority lanes are future work. Embeddings and LLM extraction are
+**batched** across a job's chunks to amortize cost.
 
 ---
 
