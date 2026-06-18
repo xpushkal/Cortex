@@ -8,6 +8,13 @@ All endpoints are tenant-scoped. A request whose token tenant ≠ `X-Tenant` is
 rejected `403`. Retrieval is always tenant-filtered server-side; there is no way to
 query across tenants.
 
+Enforcement is gated by `CORTEX_AUTH_REQUIRED` (off in dev/tests, where the tenant
+comes from `X-Tenant` directly; on in production, where a missing/invalid token is
+`401`). Mint a key with `python -m cortex.api.auth mint --tenant <name> --name <label>`
+— the raw token is shown once; only its SHA-256 is stored (`api_keys`). With
+`CORTEX_RLS_ENFORCE`, request sessions run under the least-privilege `cortex_app`
+role so Postgres RLS is the active guard; the tenant GUC is set either way.
+
 ---
 
 ## Conventions
