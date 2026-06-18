@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     # heavy bucket: /ask (LLM cost) — 10 req / 10 s.
     ratelimit_heavy_capacity: int = 10
     ratelimit_heavy_refill_per_second: float = 1.0
+    # admin bucket: /sources* (management) — 20 req / min.
+    ratelimit_admin_capacity: int = 20
+    ratelimit_admin_refill_per_second: float = 0.333
 
 
 def get_settings() -> Settings:

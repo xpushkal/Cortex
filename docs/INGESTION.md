@@ -50,9 +50,15 @@ flowchart LR
 Each stage is a unit-testable function. The worker (`apps/workers`, `arq`)
 orchestrates them per job: `run_pipeline` (`cortex.workers.pipeline`) is the arq
 task, and the API enqueues it via `enqueue_ingest_event` when `CORTEX_WORKER_ASYNC`
-is set (else it runs inline). A single default queue today; the `realtime > backfill
-> reprocess` priority lanes are future work. Embeddings and LLM extraction are
-**batched** across a job's chunks to amortize cost.
+is set (else it runs inline). Jobs route to priority lanes — `realtime` (webhook
+deltas) > `backfill` (history pulls, via `enqueue_backfill` / `ingest --enqueue`) >
+`reprocess` (DLQ replays); run one worker per lane (`CORTEX_WORKER_QUEUE`) and give
+realtime the most concurrency so backfills never starve live updates. A job that
+still fails after `MAX_TRIES` (with backoff) is dead-lettered to a Redis list
+(`cortex.workers.deadletter`) for inspection/replay rather than lost. Concurrent
+backfill jobs racing to create the same shared source/entity are made safe by unique
+constraints plus retry (the rolled-back txn finds the row on the next attempt).
+Embeddings and LLM extraction are **batched** across a job's chunks to amortize cost.
 
 ---
 

@@ -97,7 +97,7 @@ async def test_async_enqueue_pushes_job_without_running_pipeline(
         (
             "run_pipeline",
             {
-                "_queue_name": "cortex:ingest",
+                "_queue_name": "cortex:realtime",
                 "tenant_id": str(fresh_tenant),
                 "source_kind": "sample",
                 "external_id": "wp-3",

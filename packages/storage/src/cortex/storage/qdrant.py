@@ -117,6 +117,29 @@ async def delete_artifact_points(
     )
 
 
+async def delete_source_points(
+    client: AsyncQdrantClient, *, tenant_id: uuid.UUID, source_kind: str
+) -> None:
+    """Remove all points for one source (used when a source is disconnected).
+
+    One source per (tenant, kind), so filtering on tenant_id + source_kind targets
+    exactly this source's vectors.
+    """
+    await client.delete(
+        collection_name=CHUNKS_COLLECTION,
+        points_selector=models.Filter(
+            must=[
+                models.FieldCondition(
+                    key="tenant_id", match=models.MatchValue(value=str(tenant_id))
+                ),
+                models.FieldCondition(
+                    key="source_kind", match=models.MatchValue(value=source_kind)
+                ),
+            ]
+        ),
+    )
+
+
 async def search(
     client: AsyncQdrantClient,
     *,

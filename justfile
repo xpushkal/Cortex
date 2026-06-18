@@ -38,6 +38,10 @@ sweep:
 loadtest *ARGS:
     uv run python scripts/load_test.py {{ARGS}}
 
+# In-process latency-regression smoke (needs infra; docs/SCALE.md).
+loadtest-smoke:
+    uv run pytest -m load -s
+
 # Fine-tune domain embeddings (M5; needs the `ml` extra: uv sync --extra ml).
 train-embeddings *ARGS:
     uv run python scripts/train_embeddings.py {{ARGS}}
@@ -46,9 +50,14 @@ train-embeddings *ARGS:
 dev:
     uv run uvicorn cortex.api.main:app --reload --port 8000
 
-# Run the arq ingestion worker (drains the queue; needs Redis + CORTEX_WORKER_ASYNC=true on the API).
-worker:
-    uv run arq cortex.workers.main.WorkerSettings
+# Run an arq worker on one priority lane (default realtime). Run one per lane.
+# Needs Redis + CORTEX_WORKER_ASYNC=true on the API.
+worker queue="cortex:realtime":
+    CORTEX_WORKER_QUEUE={{queue}} uv run arq cortex.workers.main.WorkerSettings
+
+# Inspect or replay the ingestion dead-letter queue (`just dlq list` | `just dlq requeue`).
+dlq *ARGS:
+    uv run python -m cortex.workers.deadletter {{ARGS}}
 
 # Lint + format check.
 lint:

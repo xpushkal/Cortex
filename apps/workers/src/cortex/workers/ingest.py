@@ -24,6 +24,7 @@ from typing import Any
 
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cortex.connectors import GitHubConnector, SampleConnector
@@ -79,17 +80,20 @@ def _hash(text: str) -> str:
 async def _get_or_create_source(
     session: AsyncSession, *, tenant_id: uuid.UUID, kind: str
 ) -> Source:
-    existing = (
+    # Race-safe: concurrent backfill jobs for the same (tenant, kind) would
+    # otherwise SELECT-miss and both INSERT, creating duplicate sources. The
+    # unique index (migration 0008) + ON CONFLICT DO NOTHING collapses that to one.
+    await session.execute(
+        pg_insert(Source)
+        .values(tenant_id=tenant_id, kind=kind)
+        .on_conflict_do_nothing(index_elements=["tenant_id", "kind"])
+    )
+    await session.flush()
+    return (
         await session.execute(
             select(Source).where(Source.tenant_id == tenant_id, Source.kind == kind)
         )
-    ).scalar_one_or_none()
-    if existing is not None:
-        return existing
-    source = Source(tenant_id=tenant_id, kind=kind)
-    session.add(source)
-    await session.flush()
-    return source
+    ).scalar_one()
 
 
 async def ingest_source(
@@ -331,11 +335,25 @@ def _build_connector(
 
 
 async def _amain(
-    source: str, tenant: str, *, repo: str | None, max_files: int | None, max_items: int | None
+    source: str,
+    tenant: str,
+    *,
+    repo: str | None,
+    max_files: int | None,
+    max_items: int | None,
+    enqueue: bool,
 ) -> None:
     init_tracing("cortex-workers")
     tenant_id = resolve_tenant(tenant)
     connector = _build_connector(source, repo=repo, max_files=max_files, max_items=max_items)
+    if enqueue:
+        # Async backfill: fan out per-artifact jobs onto the backfill lane for the
+        # worker to drain. Requires Redis + a worker on CORTEX_WORKER_QUEUE=cortex:backfill.
+        from cortex.workers.queue import enqueue_backfill
+
+        n = await enqueue_backfill(connector, tenant_id=tenant_id)
+        print(f"enqueued {n} backfill job(s) tenant={tenant} ({tenant_id}) -> cortex:backfill")
+        return
     stats = await ingest_source(connector, tenant_id=tenant_id)
     print(f"ingested tenant={tenant} ({tenant_id}): {stats.model_dump()}")
 
@@ -347,6 +365,11 @@ def main() -> None:
     parser.add_argument("--repo", help="owner/name (required for --source github)")
     parser.add_argument("--max-files", type=int, help="cap markdown files (github)")
     parser.add_argument("--max-items", type=int, help="cap issues+PRs (github)")
+    parser.add_argument(
+        "--enqueue",
+        action="store_true",
+        help="enqueue per-artifact jobs onto the backfill lane instead of ingesting inline",
+    )
     args = parser.parse_args()
     _load_dotenv()
     asyncio.run(
@@ -356,6 +379,7 @@ def main() -> None:
             repo=args.repo,
             max_files=args.max_files,
             max_items=args.max_items,
+            enqueue=args.enqueue,
         )
     )
 

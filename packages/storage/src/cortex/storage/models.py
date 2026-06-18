@@ -54,6 +54,11 @@ class Source(Base):
     """A connected source system for a tenant (docs/DATA_MODEL.md §2)."""
 
     __tablename__ = "sources"
+    __table_args__ = (
+        # One source per (tenant, kind): the identity get-or-create keys on it, and
+        # the unique index makes concurrent first-ingest jobs race-safe (ON CONFLICT).
+        UniqueConstraint("tenant_id", "kind", name="uq_source_identity"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(index=True)

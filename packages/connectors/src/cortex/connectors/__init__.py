@@ -14,10 +14,12 @@ from cortex.connectors.base import (
     TokenBucketSpec,
 )
 from cortex.connectors.github import GitHubConnector
+from cortex.connectors.registry import SYNCABLE_KINDS, build_connector
 from cortex.connectors.sample import SAMPLE_CORPUS, SampleConnector
 
 __all__ = [
     "SAMPLE_CORPUS",
+    "SYNCABLE_KINDS",
     "Artifact",
     "Connector",
     "Cursor",
@@ -26,4 +28,5 @@ __all__ = [
     "SampleConnector",
     "SourceConfig",
     "TokenBucketSpec",
+    "build_connector",
 ]

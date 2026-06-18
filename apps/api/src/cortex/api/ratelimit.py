@@ -38,6 +38,12 @@ def _build_limiters() -> dict[str, RateLimiter]:
             redis_url=url,
             namespace="rl:heavy",
         ),
+        "admin": build_limiter(
+            settings.ratelimit_admin_capacity,
+            settings.ratelimit_admin_refill_per_second,
+            redis_url=url,
+            namespace="rl:admin",
+        ),
     }
 
 

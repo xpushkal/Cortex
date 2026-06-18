@@ -38,15 +38,36 @@ services:
     volumes:
       - redisdata:/data
 
-  # arq ingestion worker. Opt-in (drains the ingest queue): `docker compose
-  # --profile worker up worker`. The API must run with CORTEX_WORKER_ASYNC=true to
-  # enqueue rather than ingest inline.
-  worker:
+  # arq ingestion workers, one per priority lane. Opt-in: `docker compose
+  # --profile worker up worker-realtime worker-backfill`. The API must run with
+  # CORTEX_WORKER_ASYNC=true to enqueue rather than ingest inline.
+  worker-realtime:
     profiles: ["worker"]
     build:
       context: ..
       dockerfile: apps/workers/Dockerfile
     environment:
+      CORTEX_WORKER_QUEUE: "cortex:realtime"
+      REDIS_URL: "redis://redis:6379/0"
+      POSTGRES_DSN: "postgresql+asyncpg://cortex:cortex@postgres:5432/cortex"
+      QDRANT_URL: "http://qdrant:6333"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      redis:
+        condition: service_started
+
+  # Backfill lane: lower priority; scale separately so history pulls never starve
+  # realtime. Same image, different queue.
+  worker-backfill:
+    profiles: ["worker"]
+    build:
+      context: ..
+      dockerfile: apps/workers/Dockerfile
+    environment:
+      CORTEX_WORKER_QUEUE: "cortex:backfill"
       REDIS_URL: "redis://redis:6379/0"
       POSTGRES_DSN: "postgresql+asyncpg://cortex:cortex@postgres:5432/cortex"
       QDRANT_URL: "http://qdrant:6333"

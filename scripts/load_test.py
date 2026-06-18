@@ -21,7 +21,9 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import statistics
+import sys
 import time
 from dataclasses import dataclass, field
 
@@ -33,20 +35,35 @@ class Results:
     latencies_ms: list[float] = field(default_factory=list)
     errors: int = 0
 
-    def report(self, duration: float) -> str:
+    def metrics(self, duration: float) -> dict[str, float]:
         n = len(self.latencies_ms)
         if n == 0:
-            return f"no successful requests ({self.errors} errors)"
+            return {"requests": 0.0, "errors": float(self.errors)}
         s = sorted(self.latencies_ms)
 
         def pct(p: float) -> float:
             return s[min(n - 1, int(p / 100 * n))]
 
+        return {
+            "requests": float(n),
+            "errors": float(self.errors),
+            "throughput_rps": n / duration,
+            "p50_ms": pct(50),
+            "p95_ms": pct(95),
+            "p99_ms": pct(99),
+            "max_ms": max(s),
+            "mean_ms": statistics.mean(s),
+        }
+
+    def report(self, duration: float) -> str:
+        m = self.metrics(duration)
+        if not m.get("requests"):
+            return f"no successful requests ({self.errors} errors)"
         return (
-            f"requests: {n}  errors: {self.errors}\n"
-            f"throughput: {n / duration:.1f} req/s\n"
-            f"latency ms  p50={pct(50):.1f}  p95={pct(95):.1f}  "
-            f"p99={pct(99):.1f}  max={max(s):.1f}  mean={statistics.mean(s):.1f}"
+            f"requests: {int(m['requests'])}  errors: {int(m['errors'])}\n"
+            f"throughput: {m['throughput_rps']:.1f} req/s\n"
+            f"latency ms  p50={m['p50_ms']:.1f}  p95={m['p95_ms']:.1f}  "
+            f"p99={m['p99_ms']:.1f}  max={m['max_ms']:.1f}  mean={m['mean_ms']:.1f}"
         )
 
 
@@ -110,13 +127,35 @@ def main() -> None:
     parser.add_argument("--k", type=int, default=10)
     parser.add_argument("--concurrency", type=int, default=32)
     parser.add_argument("--duration", type=float, default=15.0)
+    parser.add_argument("--json", action="store_true", help="emit metrics as JSON")
+    # Optional budgets — exit non-zero if unmet, so a deployment can gate on this.
+    parser.add_argument("--max-p95-ms", type=float, help="fail if p95 latency exceeds this")
+    parser.add_argument("--min-rps", type=float, help="fail if throughput is below this")
     args = parser.parse_args()
 
     start = time.monotonic()
     results = asyncio.run(run(args))
     elapsed = time.monotonic() - start
-    print(f"# load test: {args.endpoint} x{args.concurrency} for {args.duration}s")
-    print(results.report(elapsed))
+    metrics = results.metrics(elapsed)
+
+    if args.json:
+        print(json.dumps(metrics, indent=2))
+    else:
+        print(f"# load test: {args.endpoint} x{args.concurrency} for {args.duration}s")
+        print(results.report(elapsed))
+
+    failures = []
+    if args.max_p95_ms is not None and metrics.get("p95_ms", float("inf")) > args.max_p95_ms:
+        failures.append(f"p95 {metrics.get('p95_ms', 0):.1f}ms > budget {args.max_p95_ms}ms")
+    if args.min_rps is not None and metrics.get("throughput_rps", 0.0) < args.min_rps:
+        failures.append(
+            f"throughput {metrics.get('throughput_rps', 0):.1f} < budget {args.min_rps}"
+        )
+    if metrics.get("requests", 0.0) == 0.0:
+        failures.append("no successful requests")
+    if failures:
+        print("BUDGET FAILED: " + "; ".join(failures), file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
