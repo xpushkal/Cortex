@@ -25,6 +25,16 @@ class Settings(BaseSettings):
     # instead of ingesting inline. Off by default so tests/dev keep read-after-write.
     cortex_worker_async: bool = False
 
+    # Auth: when true, endpoints require a per-tenant bearer token and the tenant
+    # is derived from it (X-Tenant, if sent, must match). Off by default so dev/tests
+    # keep using X-Tenant directly. Production sets cortex_auth_required=true.
+    cortex_auth_required: bool = False
+
+    # When true, request DB sessions run under the least-privilege cortex_app role
+    # so Postgres RLS is the active guard (not just the app-layer filter). Off by
+    # default; the tenant GUC is set on the session regardless.
+    cortex_rls_enforce: bool = False
+
     # Per-tenant ingress rate limiting (docs/API.md). Opt-in so shared test/dev
     # runs aren't throttled; production sets cortex_ratelimit=true.
     cortex_ratelimit: bool = False

@@ -30,6 +30,26 @@ class Base(DeclarativeBase):
     pass
 
 
+class ApiKey(Base):
+    """A bearer credential bound to a tenant (docs/API.md auth).
+
+    Control-plane table: looked up by `token_hash` before any tenant context is
+    set, so it is intentionally *not* under row-level security. Only the SHA-256
+    of the token is stored; the raw token is shown once at mint time.
+    """
+
+    __tablename__ = "api_keys"
+    __table_args__ = (Index("ix_api_keys_tenant", "tenant_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID]
+    name: Mapped[str]  # human label, e.g. "ci" or "laptop"
+    token_hash: Mapped[str] = mapped_column(String, unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    last_used_at: Mapped[datetime | None] = mapped_column(default=None)
+    revoked_at: Mapped[datetime | None] = mapped_column(default=None)
+
+
 class Source(Base):
     """A connected source system for a tenant (docs/DATA_MODEL.md §2)."""
 

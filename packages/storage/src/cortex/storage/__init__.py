@@ -7,7 +7,7 @@ docs/DATA_MODEL.md and docs/ARCHITECTURE.md §4.
 
 from cortex.storage.db import APP_ROLE, app_role_dsn, get_engine, get_sessionmaker, set_tenant
 from cortex.storage.fts import search_bm25
-from cortex.storage.models import Artifact, Base, Chunk, Source
+from cortex.storage.models import ApiKey, Artifact, Base, Chunk, Source
 from cortex.storage.qdrant import (
     CHUNKS_COLLECTION,
     ChunkVector,
@@ -30,6 +30,7 @@ from cortex.storage.tenancy import resolve_tenant
 __all__ = [
     "APP_ROLE",
     "CHUNKS_COLLECTION",
+    "ApiKey",
     "Artifact",
     "Base",
     "Chunk",
