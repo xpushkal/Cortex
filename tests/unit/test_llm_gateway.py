@@ -157,6 +157,28 @@ def test_honors_retry_after_header(monkeypatch: pytest.MonkeyPatch) -> None:
     assert slept == [7.0]  # waited exactly the server's Retry-After, not the 0.5s backoff
 
 
+def test_429_with_huge_retry_after_fails_fast(monkeypatch: pytest.MonkeyPatch) -> None:
+    # An exhausted daily quota returns 429 + a Retry-After of minutes/hours. We must
+    # NOT sleep through every retry (that compounds to hours over many chunks) —
+    # bail immediately so the caller skips this chunk and ingest keeps moving.
+    monkeypatch.setenv("CORTEX_LLM_PROVIDER", "openrouter")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    slept: list[float] = []
+    monkeypatch.setattr("cortex.obs.llm.time.sleep", lambda s: slept.append(s))
+    calls = {"n": 0}
+
+    def fake_post(url: str, *, headers: dict, json: dict, timeout: float) -> httpx.Response:
+        calls["n"] += 1
+        req = httpx.Request("POST", url)
+        return httpx.Response(429, headers={"retry-after": "3600"}, json={}, request=req)
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    with pytest.raises(httpx.HTTPStatusError):
+        complete(system="s", user="u")
+    assert calls["n"] == 1  # one attempt, then bail — no retry storm
+    assert slept == []  # never slept the 3600s the server demanded
+
+
 def test_openrouter_retries_then_gives_up(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CORTEX_LLM_PROVIDER", "openrouter")
     monkeypatch.setenv("OPENROUTER_API_KEY", "k")
@@ -168,6 +190,54 @@ def test_openrouter_retries_then_gives_up(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr(httpx, "post", always_drops)
     with pytest.raises(httpx.TransportError):
         complete(system="s", user="u")
+
+
+def test_rpm_paces_consecutive_calls(monkeypatch: pytest.MonkeyPatch) -> None:
+    # CORTEX_LLM_RPM proactively spaces calls so a burst stays under the limit.
+    monkeypatch.setenv("CORTEX_LLM_PROVIDER", "openrouter")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    monkeypatch.setenv("CORTEX_LLM_RPM", "60")  # 60/min -> 1s min interval
+    # Reset the process-global gate so prior tests don't leak a timestamp.
+    monkeypatch.setattr("cortex.obs.llm._last_call_monotonic", 0.0)
+    clock = {"t": 1000.0}
+    slept: list[float] = []
+    monkeypatch.setattr("cortex.obs.llm.time.monotonic", lambda: clock["t"])
+    monkeypatch.setattr("cortex.obs.llm.time.sleep", lambda s: slept.append(s))
+
+    def fake_post(url: str, *, headers: dict, json: dict, timeout: float) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "ok"}}]},
+            request=httpx.Request("POST", url),
+        )
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    complete(system="s", user="u")  # first call: gate was 0, no wait
+    assert slept == []
+    clock["t"] = 1000.3  # only 0.3s later -> must wait the remaining ~0.7s
+    complete(system="s", user="u")
+    assert slept and abs(slept[0] - 0.7) < 1e-6
+
+
+def test_rpm_unset_does_not_pace(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Default (no CORTEX_LLM_RPM): no proactive sleeps, behavior unchanged.
+    monkeypatch.delenv("CORTEX_LLM_RPM", raising=False)
+    monkeypatch.setenv("CORTEX_LLM_PROVIDER", "openrouter")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    slept: list[float] = []
+    monkeypatch.setattr("cortex.obs.llm.time.sleep", lambda s: slept.append(s))
+
+    def fake_post(url: str, *, headers: dict, json: dict, timeout: float) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "ok"}}]},
+            request=httpx.Request("POST", url),
+        )
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    complete(system="s", user="u")
+    complete(system="s", user="u")
+    assert slept == []  # no pacing when RPM is unset
 
 
 def test_openrouter_default_model(monkeypatch: pytest.MonkeyPatch) -> None:

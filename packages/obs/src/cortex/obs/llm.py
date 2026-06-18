@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 from typing import Any
 
@@ -29,7 +30,40 @@ OPENROUTER_DEFAULT_MODEL = "anthropic/claude-3.5-sonnet"
 _OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 _RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
 _MAX_ATTEMPTS = 6
-_MAX_BACKOFF = 30.0  # cap a single Retry-After / backoff wait (seconds)
+_MAX_BACKOFF = 60.0  # cap a single Retry-After / backoff wait (seconds)
+
+# Proactive pacing: a process-global gate so a burst (an ingest fans out hundreds
+# of calls) stays under the provider's requests-per-minute limit instead of
+# tripping 429s and burning the reactive Retry-After budget. Off unless
+# CORTEX_LLM_RPM is set (e.g. 30 for Groq's free tier). Process-local — across
+# multiple worker processes, set each process's RPM to a fair share of the quota.
+_rate_lock = threading.Lock()
+_last_call_monotonic = 0.0
+
+
+def _min_interval() -> float:
+    """Seconds to space consecutive calls, derived from CORTEX_LLM_RPM (0 = off)."""
+    raw = os.environ.get("CORTEX_LLM_RPM")
+    if not raw:
+        return 0.0
+    try:
+        rpm = float(raw)
+    except ValueError:
+        return 0.0
+    return 60.0 / rpm if rpm > 0 else 0.0
+
+
+def _pace() -> None:
+    """Block until at least `_min_interval()` has elapsed since the last call."""
+    interval = _min_interval()
+    if interval <= 0:
+        return
+    global _last_call_monotonic
+    with _rate_lock:
+        wait = _last_call_monotonic + interval - time.monotonic()
+        if wait > 0:
+            time.sleep(wait)
+        _last_call_monotonic = time.monotonic()
 
 
 def loads_json(text: str) -> Any:
@@ -164,6 +198,7 @@ def _post_with_retry(url: str, headers: dict[str, str], body: dict[str, Any]) ->
     for attempt in range(_MAX_ATTEMPTS):
         wait = delay
         try:
+            _pace()  # proactively stay under the provider's RPM (retries count too)
             response = httpx.post(url, headers=headers, json=body, timeout=120.0)
             if response.status_code in _RETRY_STATUS:
                 last_exc = httpx.HTTPStatusError(
@@ -174,6 +209,12 @@ def _post_with_retry(url: str, headers: dict[str, str], body: dict[str, Any]) ->
                 # Honor the server's Retry-After (free tiers send it on 429) so a
                 # rate-limited call waits the right amount instead of burning retries.
                 wait = _retry_after(response.headers, fallback=delay)
+                # An exhausted *daily* quota returns 429 with a Retry-After of many
+                # minutes/hours. Retrying (even capped at _MAX_BACKOFF) just 429s
+                # again — so across hundreds of chunks the ingest sleeps for hours.
+                # Bail now so the caller skips this chunk fast and ingest continues.
+                if wait > _MAX_BACKOFF:
+                    break
             else:
                 response.raise_for_status()
                 data: dict[str, Any] = response.json()
