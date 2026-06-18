@@ -118,9 +118,69 @@ def test_normalize_maps_to_artifact() -> None:
     assert "Login bug" in art.content
 
 
-def test_poll_is_empty_for_now() -> None:
-    items, _ = _connector().poll(CFG, Cursor())
-    assert list(items) == []
+def test_poll_returns_updated_issues_and_prs_and_advances_cursor() -> None:
+    # A poll with no prior cursor returns touched issues/PRs and sets a `since`.
+    conn = _connector()
+    items, cursor = conn.poll(CFG, Cursor())
+    by_id = {i.external_id: i for i in items}
+    assert "issue:7" in by_id  # the real issue
+    assert "issue:8" not in by_id  # the PR-as-issue is filtered out
+    assert "pr:8" in by_id
+    assert "file:README.md" not in by_id  # docs aren't polled
+    assert cursor.value.get("since")  # cursor advanced to a timestamp
+
+
+def test_poll_passes_since_and_stops_prs_past_cursor() -> None:
+    # With a cursor, `since` is sent to the issues endpoint and PR iteration stops
+    # once it crosses the cursor timestamp (pulls are sorted updated-desc).
+    seen_since: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/repos/acme/widgets/issues":
+            seen_since["issues"] = request.url.params.get("since", "")
+            if request.url.params.get("page", "1") != "1":
+                return httpx.Response(200, json=[])
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "number": 7,
+                        "title": "fresh",
+                        "body": "x",
+                        "updated_at": "2026-06-10T00:00:00Z",
+                    }
+                ],
+            )
+        if path == "/repos/acme/widgets/pulls":
+            assert request.url.params.get("direction") == "desc"
+            if request.url.params.get("page", "1") != "1":
+                return httpx.Response(200, json=[])
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "number": 9,
+                        "title": "newer",
+                        "body": "x",
+                        "updated_at": "2026-06-09T00:00:00Z",
+                    },
+                    {
+                        "number": 5,
+                        "title": "older",
+                        "body": "x",
+                        "updated_at": "2026-05-01T00:00:00Z",
+                    },
+                ],
+            )
+        return httpx.Response(404, json={})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler), base_url="https://api.github.com")
+    conn = GitHubConnector("acme/widgets", client=client)
+    items, _ = conn.poll(CFG, Cursor(value={"since": "2026-06-01T00:00:00Z"}))
+    ids = [i.external_id for i in items]
+    assert seen_since["issues"] == "2026-06-01T00:00:00Z"  # since forwarded to the API
+    assert ids == ["issue:7", "pr:9"]  # pr:5 (older than cursor) stopped early
 
 
 def test_requires_token_without_injected_client(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -123,9 +123,28 @@ class GitHubConnector:
                 client.close()
 
     def poll(self, cfg: SourceConfig, cursor: Cursor) -> tuple[Iterator[RawItem], Cursor]:
-        # Incremental sync (issues/PRs `since` the cursor) is a follow-up; backfill
-        # + the idempotent content_hash skip keeps re-ingest cheap for now.
-        return iter(()), cursor
+        """Incremental delta: issues + PRs updated since the cursor timestamp.
+
+        The cursor stores `{"since": <ISO8601 UTC>}`. Items whose body is unchanged
+        are no-ops downstream (the pipeline skips on content_hash), so re-yielding a
+        touched-but-unchanged item is cheap. Markdown docs aren't polled — there's no
+        cheap REST "updated since" for file content; doc deltas come via a re-backfill
+        or the webhook path (`POST /v1/ingest/events`). The next cursor is captured
+        *before* fetching so an item updated mid-poll isn't missed next time.
+        """
+        since = cursor.value.get("since")
+        next_since = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        def _items() -> Iterator[RawItem]:
+            client = self._client or self._new_client()
+            try:
+                yield from self._poll_issues(client, since)
+                yield from self._poll_pulls(client, since)
+            finally:
+                if self._client is None:
+                    client.close()
+
+        return _items(), Cursor(value={"since": next_since})
 
     def normalize(self, raw: RawItem) -> Artifact:
         return Artifact(
@@ -163,31 +182,56 @@ class GitHubConnector:
                 payload={"kind": "doc", "content": content, "created_at": repo_created},
             )
 
+    @staticmethod
+    def _issue_item(issue: dict[str, Any]) -> RawItem:
+        content = f"{issue.get('title', '')}\n\n{issue.get('body') or ''}".strip()
+        return RawItem(
+            external_id=f"issue:{issue['number']}",
+            payload={"kind": "issue", "content": content, "created_at": issue.get("created_at")},
+        )
+
+    @staticmethod
+    def _pr_item(pr: dict[str, Any]) -> RawItem:
+        content = f"{pr.get('title', '')}\n\n{pr.get('body') or ''}".strip()
+        return RawItem(
+            external_id=f"pr:{pr['number']}",
+            payload={"kind": "pr", "content": content, "created_at": pr.get("created_at")},
+        )
+
     def _issues(self, client: httpx.Client) -> Iterator[RawItem]:
         for issue in self._paginate(
             client, f"/repos/{self.repo}/issues", {"state": "all", "per_page": 100}
         ):
             if "pull_request" in issue:  # the issues endpoint also returns PRs
                 continue
-            content = f"{issue.get('title', '')}\n\n{issue.get('body') or ''}".strip()
-            yield RawItem(
-                external_id=f"issue:{issue['number']}",
-                payload={
-                    "kind": "issue",
-                    "content": content,
-                    "created_at": issue.get("created_at"),
-                },
-            )
+            yield self._issue_item(issue)
 
     def _pulls(self, client: httpx.Client) -> Iterator[RawItem]:
         for pr in self._paginate(
             client, f"/repos/{self.repo}/pulls", {"state": "all", "per_page": 100}
         ):
-            content = f"{pr.get('title', '')}\n\n{pr.get('body') or ''}".strip()
-            yield RawItem(
-                external_id=f"pr:{pr['number']}",
-                payload={"kind": "pr", "content": content, "created_at": pr.get("created_at")},
-            )
+            yield self._pr_item(pr)
+
+    # --- incremental poll -------------------------------------------------------
+
+    def _poll_issues(self, client: httpx.Client, since: str | None) -> Iterator[RawItem]:
+        # GitHub's issues endpoint filters by updated_at via `since` server-side.
+        params: dict[str, Any] = {"state": "all", "per_page": 100, "sort": "updated"}
+        if since:
+            params["since"] = since
+        for issue in self._paginate(client, f"/repos/{self.repo}/issues", params):
+            if "pull_request" in issue:  # filtered out; PRs come from _poll_pulls
+                continue
+            yield self._issue_item(issue)
+
+    def _poll_pulls(self, client: httpx.Client, since: str | None) -> Iterator[RawItem]:
+        # The pulls endpoint has no `since`; sort by updated desc and stop once we
+        # cross the cursor (ISO-8601 UTC strings compare chronologically).
+        params = {"state": "all", "per_page": 100, "sort": "updated", "direction": "desc"}
+        for pr in self._paginate(client, f"/repos/{self.repo}/pulls", params):
+            if since and str(pr.get("updated_at", "")) < since:
+                break
+            yield self._pr_item(pr)
 
     def _paginate(
         self, client: httpx.Client, path: str, params: dict[str, Any]
