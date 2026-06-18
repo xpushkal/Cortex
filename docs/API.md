@@ -148,10 +148,15 @@ Query params: `scope` (e.g. `support`, `finance`), `include_stale` (default fals
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| `POST` | `/v1/sources` | Connect a source (kind + config/scopes) |
+| `POST` | `/v1/sources` | Connect a source (kind + config/scopes); idempotent per (tenant, kind) |
 | `GET` | `/v1/sources` | List sources + sync status |
-| `POST` | `/v1/sources/{id}/sync` | Trigger backfill / re-sync |
-| `DELETE` | `/v1/sources/{id}` | Disconnect + purge its knowledge |
+| `POST` | `/v1/sources/{id}/sync` | Trigger backfill / re-sync (enqueued when async, else inline) |
+| `POST` | `/v1/sources/{id}/documents` | Push one document under the source (the file-upload path) |
+| `DELETE` | `/v1/sources/{id}` | Disconnect + purge its chunks/vectors |
+
+Connector-backed kinds (`sample`, `github`) sync via their adapter; `file` sources
+take content through `/documents`. External OAuth connectors (slack/gmail/notion/
+linear) plug into the same plane as their adapters land.
 
 ---
 
