@@ -3,8 +3,9 @@
 Pipeline per artifact (docs/INGESTION.md §2): normalize -> content_hash ->
 (unchanged? skip) -> chunk -> embed -> persist chunks (Postgres) + upsert vectors
 (Qdrant). Idempotent: re-ingesting an artifact whose content_hash is unchanged is a
-no-op. M0 runs this as one synchronous backfill; the arq per-artifact job + delta
-polling land in M3.
+no-op. Backfill runs this synchronously (the CLI below); the change-driven path runs
+it per artifact via the arq worker (`cortex.workers.pipeline.run_pipeline`). Delta
+polling and priority lanes land later.
 
 CLI: `python -m cortex.workers.ingest --source sample --tenant <uuid|name>`.
 """

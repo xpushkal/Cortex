@@ -48,8 +48,8 @@ async def test_ingest_event_makes_change_retrievable(
         },
         headers=headers,
     )
-    assert resp.status_code == 200
-    assert resp.json()["ingested"] == 1
+    assert resp.status_code == 202
+    assert resp.json()["status"] == "completed"  # inline default: ingested before responding
 
     # Immediately queryable (the < 60s done-when path).
     search = await api.post(
@@ -57,7 +57,8 @@ async def test_ingest_event_makes_change_retrievable(
     )
     assert any("security review" in r["text"] for r in search.json()["results"])
 
-    # Re-sending identical content is a no-op (idempotent).
+    # Re-sending identical content is accepted and idempotent (no-op at the worker
+    # layer — counts are no longer surfaced at the API; see test_ingestion_idempotency).
     again = await api.post(
         "/v1/ingest/events",
         json={
@@ -68,8 +69,8 @@ async def test_ingest_event_makes_change_retrievable(
         },
         headers=headers,
     )
-    assert again.json()["ingested"] == 0
-    assert again.json()["skipped"] == 1
+    assert again.status_code == 202
+    assert again.json()["status"] == "completed"
 
 
 async def test_review_approve_promotes_draft_to_active_fresh(
