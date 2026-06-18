@@ -219,6 +219,62 @@ def test_rpm_paces_consecutive_calls(monkeypatch: pytest.MonkeyPatch) -> None:
     assert slept and abs(slept[0] - 0.7) < 1e-6
 
 
+def test_tpm_paces_when_window_budget_exceeded(monkeypatch: pytest.MonkeyPatch) -> None:
+    # CORTEX_LLM_TPM gates on a sliding 60s token window so a burst of large
+    # prompts stays under the provider's tokens-per-minute limit.
+    monkeypatch.setenv("CORTEX_LLM_PROVIDER", "openrouter")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    monkeypatch.delenv("CORTEX_LLM_RPM", raising=False)
+    monkeypatch.setenv("CORTEX_LLM_TPM", "1000")
+    # Reset the process-global window so prior tests don't leak entries.
+    monkeypatch.setattr("cortex.obs.llm._token_window", __import__("collections").deque())
+    clock = {"t": 5000.0}
+    slept: list[float] = []
+    monkeypatch.setattr("cortex.obs.llm.time.monotonic", lambda: clock["t"])
+
+    def fake_sleep(s: float) -> None:
+        slept.append(s)
+        clock["t"] += s  # advance the clock so the window ages out
+
+    monkeypatch.setattr("cortex.obs.llm.time.sleep", fake_sleep)
+
+    # ~600 tokens/call: 2400-char prompt (=600 input) + 0 output cap.
+    big = "x" * 2400
+
+    def fake_post(url: str, *, headers: dict, json: dict, timeout: float) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "ok"}}]},
+            request=httpx.Request("POST", url),
+        )
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    complete(system="", user=big, max_tokens=0)  # 600 tok, window empty -> no wait
+    complete(system="", user=big, max_tokens=0)  # 1200 > 1000 -> must wait out window
+    assert slept and abs(slept[0] - 60.0) < 1e-6
+
+
+def test_tpm_unset_does_not_pace(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CORTEX_LLM_TPM", raising=False)
+    monkeypatch.delenv("CORTEX_LLM_RPM", raising=False)
+    monkeypatch.setenv("CORTEX_LLM_PROVIDER", "openrouter")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    slept: list[float] = []
+    monkeypatch.setattr("cortex.obs.llm.time.sleep", lambda s: slept.append(s))
+
+    def fake_post(url: str, *, headers: dict, json: dict, timeout: float) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "ok"}}]},
+            request=httpx.Request("POST", url),
+        )
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    complete(system="s", user="u" * 10000)
+    complete(system="s", user="u" * 10000)
+    assert slept == []  # no token pacing when TPM is unset
+
+
 def test_rpm_unset_does_not_pace(monkeypatch: pytest.MonkeyPatch) -> None:
     # Default (no CORTEX_LLM_RPM): no proactive sleeps, behavior unchanged.
     monkeypatch.delenv("CORTEX_LLM_RPM", raising=False)

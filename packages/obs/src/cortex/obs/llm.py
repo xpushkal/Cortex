@@ -15,6 +15,11 @@ Groq, Ollama (local, free), GitHub Models, Gemini, vLLM, etc. behind one key:
     # Groq (free):   CORTEX_LLM_BASE_URL=https://api.groq.com/openai/v1
     # Ollama (local):CORTEX_LLM_BASE_URL=http://localhost:11434/v1   (no key)
     # model via CORTEX_LLM_MODEL (or legacy OPENROUTER_MODEL); key via CORTEX_LLM_API_KEY.
+
+Free tiers rate-limit hard. Two optional client-side gates keep a burst (an
+ingest fans out hundreds of calls) under the limit instead of 429-skipping:
+`CORTEX_LLM_RPM` (requests/min) and `CORTEX_LLM_TPM` (tokens/min) — e.g. 30 / 6000
+for Groq's free Llama tier. Both off by default and process-local.
 """
 
 from __future__ import annotations
@@ -23,6 +28,7 @@ import json
 import os
 import threading
 import time
+from collections import deque
 from typing import Any
 
 ANTHROPIC_DEFAULT_MODEL = "claude-opus-4-8"
@@ -64,6 +70,55 @@ def _pace() -> None:
         if wait > 0:
             time.sleep(wait)
         _last_call_monotonic = time.monotonic()
+
+
+# Token-per-minute gate: RPM pacing alone won't keep a burst under a provider's
+# *token* budget (Groq's free tier is TPM-bound — a few requests of large prompts
+# trips 429 even at a low RPM). A sliding 60s window of recently-spent tokens lets
+# enrichment *complete* (slower) instead of 429-skipping. Off unless CORTEX_LLM_TPM
+# is set. Process-local, same caveat as the RPM gate.
+_TPM_WINDOW = 60.0
+_token_lock = threading.Lock()
+_token_window: deque[tuple[float, int]] = deque()  # (monotonic_ts, tokens)
+
+
+def _max_tpm() -> float:
+    """Token-per-minute budget from CORTEX_LLM_TPM (0 = off)."""
+    raw = os.environ.get("CORTEX_LLM_TPM")
+    if not raw:
+        return 0.0
+    try:
+        tpm = float(raw)
+    except ValueError:
+        return 0.0
+    return tpm if tpm > 0 else 0.0
+
+
+def _estimate_tokens(body: dict[str, Any]) -> int:
+    """Rough token cost of a request: ~4 chars/token of prompt + the output cap."""
+    chars = sum(len(str(m.get("content", ""))) for m in body.get("messages", []))
+    out = int(body.get("max_tokens", 0) or 0)
+    return chars // 4 + out
+
+
+def _pace_tokens(estimated: int) -> None:
+    """Block until the 60s token window has room for `estimated` more tokens."""
+    cap = _max_tpm()
+    if cap <= 0:
+        return
+    with _token_lock:
+        while True:
+            now = time.monotonic()
+            while _token_window and now - _token_window[0][0] >= _TPM_WINDOW:
+                _token_window.popleft()
+            used = sum(tok for _, tok in _token_window)
+            # Admit if there's room, or if the window is empty (a single call larger
+            # than the whole budget can't be split — let it through rather than hang).
+            if not _token_window or used + estimated <= cap:
+                _token_window.append((now, estimated))
+                return
+            # Wait for the oldest entry to age out of the window, then re-check.
+            time.sleep(max(_TPM_WINDOW - (now - _token_window[0][0]), 0.0))
 
 
 def loads_json(text: str) -> Any:
@@ -194,11 +249,13 @@ def _post_with_retry(url: str, headers: dict[str, str], body: dict[str, Any]) ->
     import httpx
 
     delay = 0.5
+    est_tokens = _estimate_tokens(body)
     last_exc: Exception | None = None
     for attempt in range(_MAX_ATTEMPTS):
         wait = delay
         try:
             _pace()  # proactively stay under the provider's RPM (retries count too)
+            _pace_tokens(est_tokens)  # ...and under its tokens-per-minute budget
             response = httpx.post(url, headers=headers, json=body, timeout=120.0)
             if response.status_code in _RETRY_STATUS:
                 last_exc = httpx.HTTPStatusError(
