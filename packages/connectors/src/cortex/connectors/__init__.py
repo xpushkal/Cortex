@@ -14,6 +14,7 @@ from cortex.connectors.base import (
     TokenBucketSpec,
 )
 from cortex.connectors.github import GitHubConnector
+from cortex.connectors.gmail import GmailConnector
 from cortex.connectors.linear import LinearConnector
 from cortex.connectors.notion import NotionConnector
 from cortex.connectors.registry import SYNCABLE_KINDS, build_connector
@@ -27,6 +28,7 @@ __all__ = [
     "Connector",
     "Cursor",
     "GitHubConnector",
+    "GmailConnector",
     "LinearConnector",
     "NotionConnector",
     "RawItem",

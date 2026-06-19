@@ -1,12 +1,15 @@
-"""Notion / Slack / Linear connectors over mocked APIs (hermetic — no network)."""
+"""Notion / Slack / Linear / Gmail connectors over mocked APIs (hermetic)."""
 
 from __future__ import annotations
+
+import base64
 
 import httpx
 import pytest
 
 from cortex.connectors import (
     Connector,
+    GmailConnector,
     LinearConnector,
     NotionConnector,
     SlackConnector,
@@ -167,6 +170,49 @@ def test_linear_graphql_error_raises() -> None:
         list(conn.backfill(CFG))
 
 
+# --- Gmail ------------------------------------------------------------------
+
+
+def _b64url(text: str) -> str:
+    return base64.urlsafe_b64encode(text.encode()).decode()
+
+
+def _gmail_handler(request: httpx.Request) -> httpx.Response:
+    if request.url.path == "/gmail/v1/users/me/messages":
+        return httpx.Response(200, json={"messages": [{"id": "m1"}]})
+    if request.url.path == "/gmail/v1/users/me/messages/m1":
+        return httpx.Response(
+            200,
+            json={
+                "id": "m1",
+                "internalDate": "1700000000000",
+                "payload": {
+                    "mimeType": "multipart/alternative",
+                    "headers": [{"name": "Subject", "value": "Refund escalation"}],
+                    "parts": [
+                        {
+                            "mimeType": "text/plain",
+                            "body": {"data": _b64url("Route over $500 to finance.")},
+                        },
+                        {"mimeType": "text/html", "body": {"data": _b64url("<p>ignored</p>")}},
+                    ],
+                },
+            },
+        )
+    return httpx.Response(404, json={})
+
+
+def test_gmail_backfill_extracts_subject_and_plaintext() -> None:
+    conn = GmailConnector(client=_client(_gmail_handler))
+    arts = [conn.normalize(r) for r in conn.backfill(CFG)]
+    assert len(arts) == 1
+    art = arts[0]
+    assert art.source_kind == "gmail" and art.kind == "email"
+    assert art.external_id == "gmail:m1"
+    assert "Refund escalation" in art.content and "finance" in art.content
+    assert "ignored" not in art.content  # html part not used when text/plain exists
+
+
 # --- protocol + registry ----------------------------------------------------
 
 
@@ -176,6 +222,7 @@ def test_linear_graphql_error_raises() -> None:
         (NotionConnector, _notion_handler),
         (SlackConnector, _slack_handler),
         (LinearConnector, _linear_handler),
+        (GmailConnector, _gmail_handler),
     ],
 )
 def test_connectors_satisfy_protocol(conn, handler) -> None:
@@ -186,7 +233,8 @@ def test_registry_builds_new_kinds(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("NOTION_TOKEN", "t")
     monkeypatch.setenv("SLACK_TOKEN", "t")
     monkeypatch.setenv("LINEAR_API_KEY", "t")
-    for kind in ("notion", "slack", "linear"):
+    monkeypatch.setenv("GMAIL_TOKEN", "t")
+    for kind in ("notion", "slack", "linear", "gmail"):
         assert build_connector(kind).kind == kind
 
 

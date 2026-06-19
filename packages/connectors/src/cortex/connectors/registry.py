@@ -11,15 +11,16 @@ from typing import Any
 
 from cortex.connectors.base import Connector
 from cortex.connectors.github import GitHubConnector
+from cortex.connectors.gmail import GmailConnector
 from cortex.connectors.linear import LinearConnector
 from cortex.connectors.notion import NotionConnector
 from cortex.connectors.sample import SampleConnector
 from cortex.connectors.slack import SlackConnector
 
 # Kinds whose history can be pulled by `sync`. Token-based connectors read their
-# credential from the environment (NOTION_TOKEN / SLACK_TOKEN / LINEAR_API_KEY,
-# like GITHUB_TOKEN); `file` sources take content via the upload endpoint instead.
-SYNCABLE_KINDS = ("sample", "github", "notion", "slack", "linear")
+# credential from the environment (NOTION_TOKEN / SLACK_TOKEN / LINEAR_API_KEY /
+# GMAIL_TOKEN, like GITHUB_TOKEN); `file` sources take content via upload instead.
+SYNCABLE_KINDS = ("sample", "github", "notion", "slack", "linear", "gmail")
 
 
 def build_connector(kind: str, config: dict[str, Any] | None = None) -> Connector:
@@ -43,4 +44,7 @@ def build_connector(kind: str, config: dict[str, Any] | None = None) -> Connecto
     if kind == "linear":
         caps = {k: config[k] for k in ("max_items",) if k in config}
         return LinearConnector(**caps)
+    if kind == "gmail":
+        caps = {k: config[k] for k in ("query", "max_items") if k in config}
+        return GmailConnector(**caps)
     raise ValueError(f"no backfill connector for source kind {kind!r}")

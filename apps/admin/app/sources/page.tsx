@@ -50,6 +50,7 @@ export default function SourcesPage() {
             <option value="notion">notion</option>
             <option value="slack">slack</option>
             <option value="linear">linear</option>
+            <option value="gmail">gmail</option>
             <option value="file">file (upload)</option>
           </select>
           <button disabled={busy} onClick={() => void act("connected", () => api.createSource(kind))}>
