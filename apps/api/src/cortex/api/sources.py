@@ -129,8 +129,10 @@ async def sync_source(
             detail=f"kind {source.kind!r} has no backfill; push content via /documents",
         )
     try:
+        # ValueError: missing/invalid config. RuntimeError: missing credential
+        # (e.g. NOTION_TOKEN). Both are a 422 ("fix the source"), not a 500.
         connector = build_connector(source.kind, source.config)
-    except ValueError as exc:
+    except (ValueError, RuntimeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     with _tracer.start_as_current_span("sources.sync") as span:

@@ -47,6 +47,9 @@ export default function SourcesPage() {
           <select value={kind} onChange={(e) => setKind(e.target.value)}>
             <option value="sample">sample</option>
             <option value="github">github</option>
+            <option value="notion">notion</option>
+            <option value="slack">slack</option>
+            <option value="linear">linear</option>
             <option value="file">file (upload)</option>
           </select>
           <button disabled={busy} onClick={() => void act("connected", () => api.createSource(kind))}>

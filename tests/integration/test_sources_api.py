@@ -89,6 +89,18 @@ async def test_sync_unsupported_kind_is_422(api: AsyncClient, tenant: uuid.UUID)
     assert (await api.post(f"/v1/sources/{sid}/sync", headers=h)).status_code == 422
 
 
+async def test_sync_missing_credential_is_422_not_500(
+    api: AsyncClient, tenant: uuid.UUID, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A token-based connector with no credential must surface a clean 422, not a 500.
+    monkeypatch.delenv("NOTION_TOKEN", raising=False)
+    h = {"X-Tenant": str(tenant)}
+    sid = (await api.post("/v1/sources", json={"kind": "notion"}, headers=h)).json()["id"]
+    resp = await api.post(f"/v1/sources/{sid}/sync", headers=h)
+    assert resp.status_code == 422
+    assert "NOTION_TOKEN" in resp.json()["detail"]
+
+
 async def test_unknown_source_is_404(api: AsyncClient, tenant: uuid.UUID) -> None:
     h = {"X-Tenant": str(tenant)}
     assert (await api.delete(f"/v1/sources/{uuid.uuid4()}", headers=h)).status_code == 404

@@ -14,8 +14,11 @@ from cortex.connectors.base import (
     TokenBucketSpec,
 )
 from cortex.connectors.github import GitHubConnector
+from cortex.connectors.linear import LinearConnector
+from cortex.connectors.notion import NotionConnector
 from cortex.connectors.registry import SYNCABLE_KINDS, build_connector
 from cortex.connectors.sample import SAMPLE_CORPUS, SampleConnector
+from cortex.connectors.slack import SlackConnector
 
 __all__ = [
     "SAMPLE_CORPUS",
@@ -24,8 +27,11 @@ __all__ = [
     "Connector",
     "Cursor",
     "GitHubConnector",
+    "LinearConnector",
+    "NotionConnector",
     "RawItem",
     "SampleConnector",
+    "SlackConnector",
     "SourceConfig",
     "TokenBucketSpec",
     "build_connector",

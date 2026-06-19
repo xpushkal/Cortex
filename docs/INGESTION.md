@@ -27,8 +27,12 @@ class Connector(Protocol):
   (`source_kind`, `external_id`, `kind`, `content`, `created_at`, participants).
 
 ### v1 connectors
-Slack, Gmail, Notion, GitHub, Linear, generic file upload. A `sample` connector
-seeds a deterministic synthetic corpus for tests and the eval golden set.
+Implemented: GitHub, Notion, Slack, Linear (token-based, read their credential from
+`GITHUB_TOKEN` / `NOTION_TOKEN` / `SLACK_TOKEN` / `LINEAR_API_KEY`), generic file
+upload (`POST /v1/sources/{id}/documents`), and a `sample` connector that seeds a
+deterministic synthetic corpus for tests and the eval golden set. Gmail (OAuth) is
+pending. Each is built from `(kind, config)` via `cortex.connectors.build_connector`
+and synced through `POST /v1/sources/{id}/sync`.
 
 ---
 
