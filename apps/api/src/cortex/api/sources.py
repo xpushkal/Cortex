@@ -77,20 +77,24 @@ async def create_source(
     session: Annotated[AsyncSession, Depends(db_session)],
 ) -> SourceInfo:
     # Idempotent on (tenant, kind): connecting an existing kind returns it.
+    # flush (not commit) before the read-back: the RLS tenant GUC is transaction-
+    # local, so committing here would drop it and the SELECT would fail-closed.
     await session.execute(
         pg_insert(Source)
         .values(tenant_id=tenant, kind=req.kind, config=req.config)
         .on_conflict_do_nothing(index_elements=["tenant_id", "kind"])
     )
-    await session.commit()
+    await session.flush()
     source = (
         await session.execute(
             select(Source).where(Source.tenant_id == tenant, Source.kind == req.kind)
         )
     ).scalar_one()
-    return SourceInfo(
+    info = SourceInfo(
         id=source.id, kind=source.kind, status=source.status, created_at=source.created_at
     )
+    await session.commit()
+    return info
 
 
 @router.get("/v1/sources", response_model=SourceListResponse, dependencies=[_admin])

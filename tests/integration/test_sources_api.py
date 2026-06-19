@@ -104,3 +104,23 @@ async def test_sync_missing_credential_is_422_not_500(
 async def test_unknown_source_is_404(api: AsyncClient, tenant: uuid.UUID) -> None:
     h = {"X-Tenant": str(tenant)}
     assert (await api.delete(f"/v1/sources/{uuid.uuid4()}", headers=h)).status_code == 404
+
+
+async def test_sources_flow_under_rls_enforce(
+    api: AsyncClient, tenant: uuid.UUID, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Regression: with RLS enforced, the request session runs under cortex_app and
+    # the tenant GUC is transaction-local. create_source must flush+read-back within
+    # the same transaction (not commit first) or RLS fail-closes -> 500.
+    monkeypatch.setenv("CORTEX_RLS_ENFORCE", "true")
+    h = {"X-Tenant": str(tenant)}
+    created = await api.post("/v1/sources", json={"kind": "sample"}, headers=h)
+    assert created.status_code == 201, created.text
+    sid = created.json()["id"]
+
+    synced = await api.post(f"/v1/sources/{sid}/sync", headers=h)
+    assert synced.status_code == 200 and synced.json()["chunks"] > 0
+    assert (await api.post("/v1/search", json={"q": "refund finance", "k": 3}, headers=h)).json()[
+        "results"
+    ]
+    assert (await api.get("/v1/sources", headers=h)).json()["sources"][0]["kind"] == "sample"
