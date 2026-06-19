@@ -1,24 +1,59 @@
-# Ingestion worker Deployment + HPA, and the freshness TTL sweep CronJob.
-# Workers autoscale on queue depth (a custom Prometheus metric via the
-# prometheus-adapter) so ingestion backlog drains without starving live updates
-# (docs/INGESTION.md §6); CPU is the fallback signal.
+# Ingestion workers, one Deployment per priority lane (docs/INGESTION.md §2,§4),
+# plus the freshness TTL sweep CronJob. Each lane drains its own arq queue via
+# CORTEX_WORKER_QUEUE; the realtime lane (webhook deltas) is given more headroom
+# so large backfills never starve live updates. Workers autoscale on queue depth
+# (a custom Prometheus metric via the prometheus-adapter); CPU is the fallback.
+#
+# realtime > backfill > reprocess. The reprocess lane is run on demand to drain
+# the dead-letter queue (`python -m cortex.workers.deadletter requeue`), so it
+# has no standing Deployment here.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: cortex-worker
+  name: cortex-worker-realtime
   namespace: cortex
-  labels: { app: cortex-worker }
+  labels: { app: cortex-worker, lane: realtime }
 spec:
-  replicas: 2
+  replicas: 3
   selector:
-    matchLabels: { app: cortex-worker }
+    matchLabels: { app: cortex-worker, lane: realtime }
   template:
     metadata:
-      labels: { app: cortex-worker }
+      labels: { app: cortex-worker, lane: realtime }
     spec:
       containers:
         - name: worker
           image: ghcr.io/xpushkal/cortex-worker:latest
+          env:
+            - name: CORTEX_WORKER_QUEUE
+              value: "cortex:realtime"
+          envFrom:
+            - configMapRef: { name: cortex-config }
+            - secretRef: { name: cortex-secrets }
+          resources:
+            requests: { cpu: "1", memory: "1Gi" }
+            limits: { cpu: "4", memory: "4Gi" }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cortex-worker-backfill
+  namespace: cortex
+  labels: { app: cortex-worker, lane: backfill }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: cortex-worker, lane: backfill }
+  template:
+    metadata:
+      labels: { app: cortex-worker, lane: backfill }
+    spec:
+      containers:
+        - name: worker
+          image: ghcr.io/xpushkal/cortex-worker:latest
+          env:
+            - name: CORTEX_WORKER_QUEUE
+              value: "cortex:backfill"
           envFrom:
             - configMapRef: { name: cortex-config }
             - secretRef: { name: cortex-secrets }
@@ -29,15 +64,15 @@ spec:
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: cortex-worker
+  name: cortex-worker-realtime
   namespace: cortex
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: cortex-worker
-  minReplicas: 2
-  maxReplicas: 20
+    name: cortex-worker-realtime
+  minReplicas: 3
+  maxReplicas: 30
   metrics:
     # Primary: scale on ingestion queue depth (custom metric, prometheus-adapter).
     - type: Pods
@@ -48,6 +83,26 @@ spec:
           type: AverageValue
           averageValue: "100"
     # Fallback: CPU saturation.
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 75
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cortex-worker-backfill
+  namespace: cortex
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cortex-worker-backfill
+  minReplicas: 1
+  maxReplicas: 20
+  metrics:
     - type: Resource
       resource:
         name: cpu

@@ -12,7 +12,14 @@ data:
   REDIS_URL: "redis://redis:6379/0"
   CORTEX_QDRANT_SHARDS: "6"
   CORTEX_RATELIMIT: "true"
+  # Production ML defaults: the real models, not the hashing/passthrough demo path.
   CORTEX_EMBEDDER: "bge"
+  CORTEX_RERANKER: "bge"
+  # Production security defaults: bearer auth required + Postgres RLS the active guard.
+  CORTEX_AUTH_REQUIRED: "true"
+  CORTEX_RLS_ENFORCE: "true"
+  # Ingestion is async: the API enqueues to the arq worker lanes (non-blocking).
+  CORTEX_WORKER_ASYNC: "true"
   EVAL_GATE: "advisory"
 ---
 apiVersion: v1
@@ -24,4 +31,13 @@ type: Opaque
 stringData:
   # The app runs as the least-privilege cortex_app role (RLS enforced).
   POSTGRES_DSN: "postgresql+asyncpg://cortex_app:REPLACE_ME@postgres:5432/cortex"
+  # The owner role used only by the migration Job (DDL needs more than cortex_app).
+  POSTGRES_ADMIN_DSN: "postgresql+asyncpg://cortex:REPLACE_ME@postgres:5432/cortex"
   ANTHROPIC_API_KEY: "REPLACE_ME"
+  # Source connector credentials (only the sources you connect need a value).
+  # Populate from a real secret manager; never commit values.
+  GITHUB_TOKEN: "REPLACE_ME"
+  NOTION_TOKEN: "REPLACE_ME"
+  SLACK_TOKEN: "REPLACE_ME"
+  LINEAR_API_KEY: "REPLACE_ME"
+  GMAIL_TOKEN: "REPLACE_ME"

@@ -1,0 +1,38 @@
+# Schema migration Job — run `alembic upgrade head` before rolling out the API and
+# workers (and on every deploy). Migrations need DDL, so this overrides the app's
+# least-privilege cortex_app POSTGRES_DSN with the owner POSTGRES_ADMIN_DSN.
+#
+# Apply order: namespace -> config -> migrate (wait for Complete) -> api + worker.
+#   kubectl apply -f namespace.yaml -f config.yaml
+#   kubectl apply -f migrate.yaml && kubectl wait --for=condition=complete job/cortex-migrate -n cortex --timeout=300s
+#   kubectl apply -f api.yaml -f worker.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cortex-migrate
+  namespace: cortex
+  labels: { app: cortex-migrate }
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels: { app: cortex-migrate }
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: ghcr.io/xpushkal/cortex-api:latest
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef: { name: cortex-config }
+            - secretRef: { name: cortex-secrets }
+          env:
+            # Explicit env wins over envFrom: run migrations as the owner, not cortex_app.
+            - name: POSTGRES_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: cortex-secrets
+                  key: POSTGRES_ADMIN_DSN
+          resources:
+            requests: { cpu: "250m", memory: "256Mi" }
+            limits: { cpu: "1", memory: "512Mi" }
